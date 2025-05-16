@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestión de Datos y Gráficos</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <header>
+        <h1>Sistema de Gestión de Requerimientos</h1>
+        <nav>
+            <button onclick="window.mostrarVista('entrada')">Entrada de Datos</button>
+            <button onclick="window.mostrarVista('visualizacion')">Ver Datos</button>
+            <button onclick="window.mostrarVista('graficos')">Gráficos y Estadísticas</button>
+        </nav>
+    </header>
+
+    <main>
+        <section id="vista-entrada">
+            <h2>Nuevo Requerimiento</h2>
+            <form id="formRequerimiento">
+                <label for="fecha">FECHA:</label>
+                <input type="date" id="fecha" required>
+
+                <label for="req">REQ:</label>
+                <input type="text" id="req" required>
+
+                <label for="nv">NV:</label>
+                <input type="text" id="nv">
+
+                <label for="canalEntrada">CANAL DE ENTRADA:</label>
+                <select id="canalEntrada">
+                    <option value="Telefono">Teléfono</option>
+                    <option value="Email">Email</option>
+                    <option value="Portal">Portal</option>
+                    <option value="Otro">Otro</option>
+                </select>
+
+                <label for="asunto">ASUNTO:</label>
+                <input type="text" id="asunto" required>
+
+                <label for="localidad">LOCALIDAD:</label>
+                <input type="text" id="localidad">
+
+                <label for="cliente">CLIENTE:</label>
+                <input type="text" id="cliente" required>
+
+                <label for="direccion">DIRECCIÓN:</label>
+                <input type="text" id="direccion">
+
+                <label for="tecnico">TECNICO:</label>
+                <input type="text" id="tecnico">
+
+                <label for="horario">HORARIO:</label>
+                <input type="text" id="horario" placeholder="Ej: 09:00 - 18:00">
+
+                <label for="estatus">ESTATUS:</label>
+                <select id="estatus">
+                    <option value="Pendiente">Pendiente</option>
+                    <option value="En Proceso">En Proceso</option>
+                    <option value="Resuelto">Resuelto</option>
+                    <option value="Cancelado">Cancelado</option>
+                </select>
+
+                <label for="tipoEquipo">TIPO DE EQUIPO:</label>
+                <input type="text" id="tipoEquipo">
+
+                <label for="observacion">OBSERVACIÓN:</label>
+                <textarea id="observacion"></textarea>
+
+                <label for="solicitante">SOLICITANTE:</label>
+                <input type="text" id="solicitante">
+
+                <button type="submit">Guardar Requerimiento</button>
+            </form>
+        </section>
+
+        <section id="vista-visualizacion" style="display:none;">
+            <h2>Requerimientos Registrados</h2>
+            <div style="overflow-x:auto;">
+                <table id="tablaRequerimientos">
+                    <thead>
+                        <tr>
+                            <th>FECHA</th>
+                            <th>REQ</th>
+                            <th>NV</th>
+                            <th>CANAL DE ENTRADA</th>
+                            <th>ASUNTO</th>
+                            <th>LOCALIDAD</th>
+                            <th>CLIENTE</th>
+                            <th>DIRECCIÓN</th>
+                            <th>TECNICO</th>
+                            <th>HORARIO</th>
+                            <th>ESTATUS</th>
+                            <th>TIPO DE EQUIPO</th>
+                            <th>OBSERVACIÓN</th>
+                            <th>SOLICITANTE</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        </tbody>
+                </table>
+            </div>
+        </section>
+
+        <section id="vista-graficos" style="display:none;">
+            <h2>Gráficos y Estadísticas</h2>
+            <div class="chart-container">
+                <h3>Requerimientos por Canal de Entrada</h3>
+                <canvas id="graficoCanalEntrada"></canvas>
+            </div>
+            <div class="chart-container">
+                <h3>Requerimientos por Estatus</h3>
+                <canvas id="graficoEstatus"></canvas>
+            </div>
+            <div class="chart-container">
+                <h3>Requerimientos por Técnico (Top 5)</h3>
+                <canvas id="graficoTecnicos"></canvas>
+            </div>
+        </section>
+    </main>
+
+    <script type="module" src="app.js"></script>
+</body>
+</html>

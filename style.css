@@ -1,0 +1,169 @@
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+    margin: 0;
+    background-color: #f4f4f4;
+    color: #333;
+    line-height: 1.6;
+}
+
+header {
+    background-color: #333;
+    color: white;
+    padding: 1rem;
+    text-align: center;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+header h1 {
+    margin: 0;
+    font-size: 1.8em;
+}
+
+header nav button {
+    background-color: #555;
+    color: white;
+    border: none;
+    padding: 0.6rem 1.2rem;
+    margin: 0.5rem 0.3rem;
+    cursor: pointer;
+    border-radius: 4px;
+    font-size: 0.95em;
+    transition: background-color 0.3s ease;
+}
+
+header nav button:hover {
+    background-color: #007bff;
+}
+
+main {
+    padding: 1.5rem;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+section {
+    background-color: white;
+    margin-bottom: 1.5rem;
+    padding: 1.5rem;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+}
+
+h2 {
+    color: #333;
+    border-bottom: 2px solid #eee;
+    padding-bottom: 0.6rem;
+    margin-top: 0;
+    font-size: 1.5em;
+}
+
+label {
+    display: block;
+    margin-top: 1rem;
+    margin-bottom: 0.3rem;
+    font-weight: bold;
+    color: #555;
+}
+
+input[type="text"],
+input[type="date"],
+input[type="number"],
+select,
+textarea {
+    width: calc(100% - 24px); /* Ajuste para padding y borde */
+    padding: 12px;
+    margin-bottom: 1rem;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    box-sizing: border-box;
+    font-size: 1em;
+}
+
+input[type="date"] {
+    appearance: none; /* Para mejor consistencia en navegadores */
+}
+
+textarea {
+    min-height: 100px;
+    resize: vertical;
+}
+
+button[type="submit"], .action-button {
+    background-color: #007bff;
+    color: white;
+    padding: 12px 18px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 1rem;
+    transition: background-color 0.3s ease;
+}
+
+button[type="submit"]:hover, .action-button:hover {
+    background-color: #0056b3;
+}
+
+.action-button.edit {
+    background-color: #ffc107;
+    color: #333;
+}
+.action-button.edit:hover {
+    background-color: #e0a800;
+}
+
+.action-button.delete {
+    background-color: #dc3545;
+}
+.action-button.delete:hover {
+    background-color: #c82333;
+}
+
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 1.5rem;
+}
+
+th, td {
+    border: 1px solid #ddd;
+    padding: 10px 12px; /* Aumentado padding */
+    text-align: left;
+    font-size: 0.95em; /* Ligeramente más pequeño para caber más */
+    vertical-align: middle;
+}
+
+th {
+    background-color: #f0f0f0;
+    font-weight: bold;
+    color: #444;
+}
+
+tr:nth-child(even) {
+    background-color: #f9f9f9;
+}
+
+.chart-container {
+    width: 100%;
+    max-width: 700px;
+    margin: 25px auto;
+    padding: 20px;
+    background-color: #fff;
+    border-radius: 8px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+}
+
+/* Responsividad básica para la tabla */
+@media (max-width: 768px) {
+    th, td {
+        font-size: 0.85em; /* Aún más pequeño en móviles */
+        padding: 8px;
+    }
+    header h1 {
+        font-size: 1.5em;
+    }
+    header nav button {
+        padding: 0.5rem 0.8rem;
+        font-size: 0.9em;
+    }
+}
