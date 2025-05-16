@@ -338,48 +338,70 @@ async function handleFileUpload() {
         }
     });
 }
-async function procesarYSubirDatos(registros) {
+async function procesarYSubirDatos(registros, cabecerasDetectadas) { // Añadido cabecerasDetectadas
     const mapeoColumnas = {
         "FECHA": "fecha", "REQ": "req", "NV": "nv", "CANAL DE ENTRADA": "canalEntrada",
         "ASUNTO": "asunto", "LOCALIDAD": "localidad", "CLIENTE": "cliente", "DIRECCIÓN": "direccion",
         "TECNICO": "tecnico", "HORARIO": "horario", "ESTATUS": "estatus", "TIPO DE EQUIPO": "tipoEquipo",
         "OBSERVACIÓN": "observacion", "SOLICITANTE": "solicitante"
     };
+    // Crear un mapeo inverso para buscar por cabecera detectada si es necesario
+    const mapeoInverso = {};
+    if (cabecerasDetectadas) {
+        for (const keyNormalizada in mapeoColumnas) {
+            const cabeceraOriginalEncontrada = cabecerasDetectadas.find(h => h.toUpperCase() === keyNormalizada.toUpperCase());
+            if (cabeceraOriginalEncontrada) {
+                mapeoInverso[cabeceraOriginalEncontrada] = mapeoColumnas[keyNormalizada];
+            }
+        }
+    }
+
+
     const registrosParaFirestore = [];
     let erroresDeFormato = 0;
 
     for (let i = 0; i < registros.length; i++) {
-        const filaCsv = registros[i];
+        const filaCsv = registros[i]; // Esto es un objeto con claves de las cabeceras CSV
         const nuevoRequerimiento = {};
         let filaValida = true;
 
-        for (const nombreColumnaCsv in mapeoColumnas) {
-            const claveFirestore = mapeoColumnas[nombreColumnaCsv];
-            let valor = filaCsv[nombreColumnaCsv];
+        // Iterar sobre las cabeceras esperadas por Firestore (claves de mapeoColumnas)
+        for (const nombreColumnaEsperadaCsv in mapeoColumnas) {
+            const claveFirestore = mapeoColumnas[nombreColumnaEsperadaCsv];
+            let valor;
 
-            if (valor === undefined && Object.values(filaCsv).filter(v => v !== undefined && v !== "").length > 0) { // Solo advertir si la fila tiene otros datos
-                logCargaMasiva(`Advertencia Fila ${i + 1} (datos: ${JSON.stringify(filaCsv).substring(0,50)}...): Columna CSV "${nombreColumnaCsv}" no encontrada o vacía. Se usará valor vacío.`, true);
-                valor = "";
-            } else if (valor === undefined) { // Fila probablemente vacía o malformada
-                valor = "";
+            // Intentar obtener el valor usando el nombre de columna esperado (idealmente normalizado por transformHeader)
+            if (filaCsv.hasOwnProperty(nombreColumnaEsperadaCsv)) {
+                valor = filaCsv[nombreColumnaEsperadaCsv];
+            } else {
+                // Si no se encuentra, intentar buscar una cabecera detectada que coincida (insensible a mayúsculas/minúsculas)
+                const cabeceraOriginalEncontrada = cabecerasDetectadas ? cabecerasDetectadas.find(h => h.toUpperCase() === nombreColumnaEsperadaCsv.toUpperCase()) : undefined;
+                if (cabeceraOriginalEncontrada && filaCsv.hasOwnProperty(cabeceraOriginalEncontrada)) {
+                    valor = filaCsv[cabeceraOriginalEncontrada];
+                } else {
+                    if (Object.values(filaCsv).filter(v => v !== undefined && v !== "").length > 0) {
+                        logCargaMasiva(`Advertencia Fila ${i + 1}: Columna CSV "${nombreColumnaEsperadaCsv}" no encontrada en los datos de la fila. Se usará valor vacío. Cabeceras en fila: ${Object.keys(filaCsv).join(', ')}`, true);
+                    }
+                    valor = ""; // O manejar como error si es requerida
+                }
             }
-
-
+            
+            // Validaciones (igual que antes)
             if (claveFirestore === "fecha") {
                 if (!valor || !/^\d{4}-\d{2}-\d{2}$/.test(String(valor).trim())) {
-                    logCargaMasiva(`Error Fila ${i + 1}: FECHA "${valor}" no tiene formato YYYY-MM-DD. Se omitirá esta fila.`, true);
+                    logCargaMasiva(`Error Fila ${i + 1}: FECHA "${valor}" (columna "${nombreColumnaEsperadaCsv}") no tiene formato YYYY-MM-DD. Se omitirá esta fila.`, true);
                     filaValida = false; break;
                 }
             }
             if (claveFirestore === "req" && (!valor || String(valor).trim() === "")) {
-                 logCargaMasiva(`Error Fila ${i + 1}: REQ es obligatorio. Se omitirá esta fila.`, true);
+                 logCargaMasiva(`Error Fila ${i + 1}: REQ (columna "${nombreColumnaEsperadaCsv}") es obligatorio. Se omitirá esta fila.`, true);
                  filaValida = false; break;
             }
             if (claveFirestore === "cliente" && (!valor || String(valor).trim() === "")) {
-                 logCargaMasiva(`Error Fila ${i + 1}: CLIENTE es obligatorio. Se omitirá esta fila.`, true);
+                 logCargaMasiva(`Error Fila ${i + 1}: CLIENTE (columna "${nombreColumnaEsperadaCsv}") es obligatorio. Se omitirá esta fila.`, true);
                  filaValida = false; break;
             }
-            nuevoRequerimiento[claveFirestore] = String(valor).trim();
+            nuevoRequerimiento[claveFirestore] = String(valor !== undefined ? valor : "").trim();
         }
 
         if (filaValida) {
