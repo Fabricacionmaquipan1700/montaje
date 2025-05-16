@@ -309,21 +309,32 @@ async function handleFileUpload() {
     if (cargaMasivaLog) cargaMasivaLog.innerHTML = '<p>Procesando archivo...</p>';
 
     Papa.parse(file, {
-        header: true,                 // SÍ, la primera fila es la cabecera
-        skipEmptyLines: true,         // Saltar líneas vacías
-        dynamicTyping: true,          // Intentar convertir tipos automáticamente
-        transformHeader: function(header) { // Limpiar cabeceras
-            return header.trim();
+        header: true,
+        skipEmptyLines: true,
+        delimiter: ",", // <--- FORZAMOS COMA COMO DELIMITADOR
+        newline: "",    // <--- Permitir que PapaParse autodetecte saltos de línea (\n, \r, o \r\n)
+        dynamicTyping: true,
+        transformHeader: function(header) {
+            return header.trim(); // Limpiar espacios de las cabeceras
         },
         complete: async function(results) {
             logCargaMasiva(`Archivo CSV leído. Filas de datos encontradas: ${results.data.length}`);
-            logCargaMasiva(`Cabeceras detectadas: ${results.meta.fields.join(', ')}`); // Log de las cabeceras detectadas
+
+            if (results.meta && results.meta.fields) {
+                logCargaMasiva(`Cabeceras detectadas por PapaParse: ${results.meta.fields.join(' | ')}`);
+            } else {
+                logCargaMasiva("No se pudieron detectar cabeceras con PapaParse.", true);
+            }
 
             if (results.errors.length > 0) {
-                logCargaMasiva("Errores durante el parseo del CSV:", true);
+                logCargaMasiva("Errores/Advertencias durante el parseo del CSV (PapaParse):", true);
                 results.errors.forEach(err => {
                      let message = err.message || JSON.stringify(err);
-                     logCargaMasiva(` - Fila ${err.row !== undefined ? err.row : 'desconocida'}: ${message}`, true)
+                     // El error "Too many fields" puede ser normal si hay columnas extra al final y no se usa 'fastMode'
+                     // Solo lo mostraremos como una advertencia si no es el único tipo de error.
+                     if (!message.includes("Too many fields") || results.errors.filter(e => !e.message.includes("Too many fields")).length > 0) {
+                        logCargaMasiva(` - Tipo: ${err.type}, Código: ${err.code}, Fila: ${err.row !== undefined ? err.row : 'desconocida'}: ${message}`, true);
+                     }
                 });
             }
 
@@ -331,7 +342,14 @@ async function handleFileUpload() {
                 logCargaMasiva("No se encontraron datos válidos en el CSV para procesar.", true);
                 return;
             }
-            await procesarYSubirDatos(results.data, results.meta.fields); // Pasamos las cabeceras detectadas
+            // Pasar las cabeceras que realmente se usaron para crear los objetos de datos.
+            // Si results.data[0] existe, Object.keys(results.data[0]) son las cabeceras efectivas.
+            const cabecerasEfectivas = results.data.length > 0 ? Object.keys(results.data[0]) : (results.meta.fields || []);
+            if (cabecerasEfectivas.length > 0) {
+                 logCargaMasiva(`Cabeceras efectivas usadas para los objetos de datos: ${cabecerasEfectivas.join(' | ')}`);
+            }
+
+            await procesarYSubirDatos(results.data, cabecerasEfectivas);
         },
         error: function(err, file) {
             logCargaMasiva("Error CRÍTICO al leer el archivo CSV con PapaParse: " + err.message, true);
