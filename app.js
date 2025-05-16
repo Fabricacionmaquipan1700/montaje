@@ -4,7 +4,7 @@ console.log("app.js: >>> Script execution started.");
 // --- CONFIGURACIÓN E INICIALIZACIÓN DE FIREBASE (SDK v9+) ---
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.10.0/firebase-app.js";
 import {
-    getFirestore, collection, addDoc, getDocs, doc, updateDoc, deleteDoc, orderBy, query, serverTimestamp, getDoc
+    getFirestore, collection, addDoc, getDocs, doc, updateDoc, deleteDoc, orderBy, query, serverTimestamp, getDoc, writeBatch // writeBatch añadido
 } from "https://www.gstatic.com/firebasejs/9.10.0/firebase-firestore.js";
 
 console.log("app.js: Firebase modules imported.");
@@ -34,13 +34,12 @@ console.log("app.js: DOM elements selected (form, table body, titulo). formReque
 
 
 // --- MANEJO DE VISTAS ---
-const vistas = ['vista-entrada', 'vista-visualizacion', 'vista-graficos'];
+const vistas = ['vista-entrada', 'vista-visualizacion', 'vista-graficos', 'vista-carga-masiva']; // Añadido 'vista-carga-masiva'
 function mostrarVista(idVista) {
     console.log(`app.js: ---> mostrarVista called with idVista = ${idVista}`);
     let foundAndDisplayedSomething = false;
     vistas.forEach(vistaIdEnArray => {
         const el = document.getElementById(vistaIdEnArray);
-        // console.log(`app.js: Checking element with ID: ${vistaIdEnArray}, Found:`, el); // Log detallado
         if (el) {
             const shouldDisplay = (vistaIdEnArray === idVista) ? 'block' : 'none';
             el.style.display = shouldDisplay;
@@ -56,7 +55,6 @@ function mostrarVista(idVista) {
         console.warn(`app.js: WARNING: mostrarVista was called for '${idVista}', but it seems its element was not found or not set to display:block.`);
     }
 
-
     if (idVista === 'vista-visualizacion') {
         console.log("app.js: mostrarVista -> calling cargarRequerimientos()");
         cargarRequerimientos();
@@ -71,13 +69,9 @@ function mostrarVista(idVista) {
         console.log("app.js: mostrarVista -> Form reset for 'vista-entrada'.");
     }
 }
-window.mostrarVista = mostrarVista; // Hacemos la función global
+window.mostrarVista = mostrarVista;
 
 // --- CRUD (Create, Read, Update, Delete) ---
-// (El resto de las funciones CRUD como estaban: formRequerimiento.addEventListener, cargarRequerimientos, editarRequerimiento, eliminarRequerimiento)
-// Asegúrate que estas funciones también tengan window.nombreFuncion = nombreFuncion si se llaman desde HTML onclick
-// Ejemplo: window.editarRequerimiento = editarRequerimiento; y window.eliminarRequerimiento = eliminarRequerimiento;
-
 formRequerimiento.addEventListener('submit', async (e) => {
     e.preventDefault();
     console.log("app.js: Form submitted.");
@@ -121,6 +115,10 @@ formRequerimiento.addEventListener('submit', async (e) => {
 
 async function cargarRequerimientos() {
     console.log("app.js: cargarRequerimientos called.");
+    if (!tablaRequerimientosBody) {
+        console.error("app.js: tablaRequerimientosBody no encontrado. No se puede cargar datos.");
+        return;
+    }
     tablaRequerimientosBody.innerHTML = '<tr><td colspan="15">Cargando...</td></tr>';
     try {
         const q = query(requerimientosCollectionRef, orderBy("timestamp", "desc"));
@@ -213,7 +211,7 @@ async function eliminarRequerimiento(id) {
 }
 window.eliminarRequerimiento = eliminarRequerimiento;
 
-// --- LÓGICA DE GRÁFICOS --- (sin cambios en la lógica interna, pero puedes añadir logs si es necesario)
+// --- LÓGICA DE GRÁFICOS ---
 let graficoCanal = null;
 let graficoEstatus = null;
 let graficoTecnicos = null;
@@ -234,7 +232,7 @@ async function cargarDatosParaGraficos() {
 }
 
 function generarGraficoCanalEntrada(data) {
-    const conteo = data.reduce((acc, curr) => { acc[curr.canalEntrada] = (acc[curr.canalEntrada] || 0) + 1; return acc; }, {});
+    const conteo = data.reduce((acc, curr) => {if(curr.canalEntrada) acc[curr.canalEntrada] = (acc[curr.canalEntrada] || 0) + 1; return acc; }, {});
     const ctx = document.getElementById('graficoCanalEntrada').getContext('2d');
     if (graficoCanal) graficoCanal.destroy();
     graficoCanal = new Chart(ctx, {
@@ -245,7 +243,7 @@ function generarGraficoCanalEntrada(data) {
 }
 
 function generarGraficoEstatus(data) {
-    const conteo = data.reduce((acc, curr) => { acc[curr.estatus] = (acc[curr.estatus] || 0) + 1; return acc; }, {});
+    const conteo = data.reduce((acc, curr) => {if(curr.estatus) acc[curr.estatus] = (acc[curr.estatus] || 0) + 1; return acc; }, {});
     const ctx = document.getElementById('graficoEstatus').getContext('2d');
     if (graficoEstatus) graficoEstatus.destroy();
     graficoEstatus = new Chart(ctx, {
@@ -267,10 +265,171 @@ function generarGraficoTecnicos(data) {
     });
 }
 
+// --- LÓGICA DE CARGA MASIVA ---
+const csvFileInput = document.getElementById('csvFile');
+const btnProcesarCsv = document.getElementById('btnProcesarCsv');
+const cargaMasivaLog = document.getElementById('cargaMasivaLog');
+
+if (btnProcesarCsv) {
+    btnProcesarCsv.addEventListener('click', handleFileUpload);
+} else {
+    // Este log puede aparecer si app.js se carga antes de que el DOM esté completamente listo
+    // o si el ID del botón es incorrecto, pero debería funcionar con type="module" y DOMContentLoaded
+    console.warn("app.js: Botón 'btnProcesarCsv' no encontrado al configurar listener inicial para carga masiva. Se intentará de nuevo en DOMContentLoaded si es necesario.");
+}
+
+function logCargaMasiva(message, isError = false) {
+    if (cargaMasivaLog) {
+        const p = document.createElement('p');
+        p.textContent = message;
+        if (isError) {
+            p.style.color = 'red';
+        }
+        cargaMasivaLog.appendChild(p);
+        cargaMasivaLog.scrollTop = cargaMasivaLog.scrollHeight;
+    }
+    if (isError) {
+        console.error("Carga Masiva:", message);
+    } else {
+        console.log("Carga Masiva:", message);
+    }
+}
+
+async function handleFileUpload() {
+    if (!csvFileInput || !csvFileInput.files || csvFileInput.files.length === 0) {
+        logCargaMasiva("Por favor, selecciona un archivo CSV primero.", true);
+        return;
+    }
+    const file = csvFileInput.files[0];
+    if (file.type !== "text/csv" && !file.name.toLowerCase().endsWith(".csv") && file.type !== "application/vnd.ms-excel") { //Añadido application/vnd.ms-excel
+         logCargaMasiva(`Tipo de archivo no soportado: ${file.type}. Por favor, selecciona un archivo con formato CSV (.csv).`, true);
+         return;
+    }
+
+    if (cargaMasivaLog) cargaMasivaLog.innerHTML = '<p>Procesando archivo...</p>';
+
+    Papa.parse(file, {
+        header: true,
+        skipEmptyLines: true,
+        complete: async function(results) {
+            logCargaMasiva(`Archivo CSV leído. Filas encontradas (después de saltar vacías, incluyendo cabecera si no se usó 'header:true'): ${results.data.length}`);
+            if (results.errors.length > 0) {
+                logCargaMasiva("Errores durante el parseo del CSV:", true);
+                results.errors.forEach(err => logCargaMasiva(` - Fila ${err.row}: ${err.message}`, true));
+            }
+            if (results.data.length === 0) {
+                logCargaMasiva("No se encontraron datos válidos en el CSV.", true);
+                return;
+            }
+            await procesarYSubirDatos(results.data);
+        },
+        error: function(err, file) {
+            logCargaMasiva("Error al leer el archivo CSV con PapaParse: " + err.message, true);
+        }
+    });
+}
+
+async function procesarYSubirDatos(registros) {
+    const mapeoColumnas = {
+        "FECHA": "fecha", "REQ": "req", "NV": "nv", "CANAL DE ENTRADA": "canalEntrada",
+        "ASUNTO": "asunto", "LOCALIDAD": "localidad", "CLIENTE": "cliente", "DIRECCIÓN": "direccion",
+        "TECNICO": "tecnico", "HORARIO": "horario", "ESTATUS": "estatus", "TIPO DE EQUIPO": "tipoEquipo",
+        "OBSERVACIÓN": "observacion", "SOLICITANTE": "solicitante"
+    };
+    const registrosParaFirestore = [];
+    let erroresDeFormato = 0;
+
+    for (let i = 0; i < registros.length; i++) {
+        const filaCsv = registros[i];
+        const nuevoRequerimiento = {};
+        let filaValida = true;
+
+        for (const nombreColumnaCsv in mapeoColumnas) {
+            const claveFirestore = mapeoColumnas[nombreColumnaCsv];
+            let valor = filaCsv[nombreColumnaCsv];
+
+            if (valor === undefined && Object.values(filaCsv).filter(v => v !== undefined && v !== "").length > 0) { // Solo advertir si la fila tiene otros datos
+                logCargaMasiva(`Advertencia Fila ${i + 1} (datos: ${JSON.stringify(filaCsv).substring(0,50)}...): Columna CSV "${nombreColumnaCsv}" no encontrada o vacía. Se usará valor vacío.`, true);
+                valor = "";
+            } else if (valor === undefined) { // Fila probablemente vacía o malformada
+                valor = "";
+            }
+
+
+            if (claveFirestore === "fecha") {
+                if (!valor || !/^\d{4}-\d{2}-\d{2}$/.test(String(valor).trim())) {
+                    logCargaMasiva(`Error Fila ${i + 1}: FECHA "${valor}" no tiene formato YYYY-MM-DD. Se omitirá esta fila.`, true);
+                    filaValida = false; break;
+                }
+            }
+            if (claveFirestore === "req" && (!valor || String(valor).trim() === "")) {
+                 logCargaMasiva(`Error Fila ${i + 1}: REQ es obligatorio. Se omitirá esta fila.`, true);
+                 filaValida = false; break;
+            }
+            if (claveFirestore === "cliente" && (!valor || String(valor).trim() === "")) {
+                 logCargaMasiva(`Error Fila ${i + 1}: CLIENTE es obligatorio. Se omitirá esta fila.`, true);
+                 filaValida = false; break;
+            }
+            nuevoRequerimiento[claveFirestore] = String(valor).trim();
+        }
+
+        if (filaValida) {
+            nuevoRequerimiento.timestamp = serverTimestamp();
+            registrosParaFirestore.push(nuevoRequerimiento);
+        } else {
+            erroresDeFormato++;
+        }
+    }
+
+    if (erroresDeFormato > 0) {
+        logCargaMasiva(`${erroresDeFormato} filas contenían errores de formato y fueron omitidas.`);
+    }
+    if (registrosParaFirestore.length === 0) {
+        logCargaMasiva("No hay registros válidos para subir a Firebase después del procesamiento.", true);
+        return;
+    }
+
+    logCargaMasiva(`Procesando ${registrosParaFirestore.length} registros válidos para subir a Firebase...`);
+    const tamanoLote = 490; // Límite es 500, un poco menos por seguridad
+    let lotesEnviados = 0;
+    let registrosSubidos = 0;
+
+    for (let i = 0; i < registrosParaFirestore.length; i += tamanoLote) {
+        const loteActual = registrosParaFirestore.slice(i, i + tamanoLote);
+        const batch = writeBatch(db);
+        loteActual.forEach(registro => {
+            const docRef = doc(collection(db, "requerimientos"));
+            batch.set(docRef, registro);
+        });
+        try {
+            await batch.commit();
+            lotesEnviados++;
+            registrosSubidos += loteActual.length;
+            logCargaMasiva(`Lote ${lotesEnviados} enviado con éxito (${loteActual.length} registros). Total subidos: ${registrosSubidos}`);
+        } catch (error) {
+            logCargaMasiva(`Error al enviar lote ${lotesEnviados + 1}: ${error.message}`, true);
+            console.error("Error en batch commit:", error);
+        }
+    }
+    logCargaMasiva(`Proceso de carga masiva completado. Total de registros válidos intentados en lotes: ${registrosSubidos}.`);
+    if (erroresDeFormato === 0 && registrosSubidos === registrosParaFirestore.length) {
+         logCargaMasiva("¡Todos los registros válidos fueron subidos exitosamente!", false);
+    } else {
+         logCargaMasiva("Algunos registros pudieron no haberse subido o fueron omitidos. Revisa el log.", true);
+    }
+    if(csvFileInput) csvFileInput.value = ""; // Limpiar el input de archivo
+}
+// --- FIN DE LÓGICA DE CARGA MASIVA ---
 
 // --- INICIALIZACIÓN ---
 document.addEventListener('DOMContentLoaded', () => {
     console.log("app.js: DOMContentLoaded event fired.");
+    // Re-intentar obtener elementos de carga masiva si no se encontraron antes (por si acaso)
+    if (!btnProcesarCsv && document.getElementById('btnProcesarCsv')) {
+        const btn = document.getElementById('btnProcesarCsv');
+        if(btn) btn.addEventListener('click', handleFileUpload);
+        console.log("app.js: Listener para 'btnProcesarCsv' añadido en DOMContentLoaded.");
+    }
     mostrarVista('vista-entrada');
 });
 
