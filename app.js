@@ -309,26 +309,35 @@ async function handleFileUpload() {
     if (cargaMasivaLog) cargaMasivaLog.innerHTML = '<p>Procesando archivo...</p>';
 
     Papa.parse(file, {
-        header: true,
-        skipEmptyLines: true,
+        header: true,                 // SÍ, la primera fila es la cabecera
+        skipEmptyLines: true,         // Saltar líneas vacías
+        dynamicTyping: true,          // Intentar convertir tipos automáticamente
+        transformHeader: function(header) { // Limpiar cabeceras
+            return header.trim();
+        },
         complete: async function(results) {
-            logCargaMasiva(`Archivo CSV leído. Filas encontradas (después de saltar vacías, incluyendo cabecera si no se usó 'header:true'): ${results.data.length}`);
+            logCargaMasiva(`Archivo CSV leído. Filas de datos encontradas: ${results.data.length}`);
+            logCargaMasiva(`Cabeceras detectadas: ${results.meta.fields.join(', ')}`); // Log de las cabeceras detectadas
+
             if (results.errors.length > 0) {
                 logCargaMasiva("Errores durante el parseo del CSV:", true);
-                results.errors.forEach(err => logCargaMasiva(` - Fila ${err.row}: ${err.message}`, true));
+                results.errors.forEach(err => {
+                     let message = err.message || JSON.stringify(err);
+                     logCargaMasiva(` - Fila ${err.row !== undefined ? err.row : 'desconocida'}: ${message}`, true)
+                });
             }
+
             if (results.data.length === 0) {
-                logCargaMasiva("No se encontraron datos válidos en el CSV.", true);
+                logCargaMasiva("No se encontraron datos válidos en el CSV para procesar.", true);
                 return;
             }
-            await procesarYSubirDatos(results.data);
+            await procesarYSubirDatos(results.data, results.meta.fields); // Pasamos las cabeceras detectadas
         },
         error: function(err, file) {
-            logCargaMasiva("Error al leer el archivo CSV con PapaParse: " + err.message, true);
+            logCargaMasiva("Error CRÍTICO al leer el archivo CSV con PapaParse: " + err.message, true);
         }
     });
 }
-
 async function procesarYSubirDatos(registros) {
     const mapeoColumnas = {
         "FECHA": "fecha", "REQ": "req", "NV": "nv", "CANAL DE ENTRADA": "canalEntrada",
