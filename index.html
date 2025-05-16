@@ -6,6 +6,7 @@
     <title>Gestión de Datos y Gráficos</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
 </head>
 <body>
     <header>
@@ -14,6 +15,7 @@
             <button onclick="window.mostrarVista('vista-entrada')">Entrada de Datos</button>
             <button onclick="window.mostrarVista('vista-visualizacion')">Ver Datos</button>
             <button onclick="window.mostrarVista('vista-graficos')">Gráficos y Estadísticas</button>
+            <button onclick="window.mostrarVista('vista-carga-masiva')">Carga Masiva</button>
         </nav>
     </header>
 
@@ -121,7 +123,28 @@
                 <canvas id="graficoTecnicos"></canvas>
             </div>
         </section>
-    </main>
+
+        <section id="vista-carga-masiva" style="display:none;">
+            <h2>Carga Masiva de Requerimientos desde CSV</h2>
+            <p>
+                El archivo CSV debe tener las siguientes columnas en la primera fila (el orden es importante):<br>
+                <code>FECHA,REQ,NV,CANAL DE ENTRADA,ASUNTO,LOCALIDAD,CLIENTE,DIRECCIÓN,TECNICO,HORARIO,ESTATUS,TIPO DE EQUIPO,OBSERVACIÓN,SOLICITANTE</code>
+            </p>
+            <p>
+                La columna FECHA debe estar en formato <code>YYYY-MM-DD</code> (ej: 2025-05-16). Los campos REQ y CLIENTE son obligatorios en cada fila del CSV.
+            </p>
+            <hr>
+            <div>
+                <label for="csvFile">Selecciona el archivo CSV:</label>
+                <input type="file" id="csvFile" accept=".csv" style="display: block; margin-bottom: 10px;">
+            </div>
+            <button id="btnProcesarCsv" type="button" style="margin-top: 15px;">Procesar y Subir CSV</button>
+
+            <div id="cargaMasivaLog" style="margin-top: 20px; border: 1px solid #ccc; padding: 10px; min-height: 100px; max-height: 300px; background-color: #f9f9f9; overflow-y: auto; font-size: 0.9em; line-height: 1.4;">
+                <p>Esperando archivo...</p>
+            </div>
+        </section>
+        </main>
 
     <script type="module" src="app.js"></script>
 </body>
