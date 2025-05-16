@@ -88,7 +88,7 @@ textarea {
     resize: vertical;
 }
 
-button[type="submit"], .action-button {
+button[type="submit"], .action-button, button[type="button"] { /* Añadido button[type="button"] */
     background-color: #007bff;
     color: white;
     padding: 12px 18px;
@@ -99,7 +99,7 @@ button[type="submit"], .action-button {
     transition: background-color 0.3s ease;
 }
 
-button[type="submit"]:hover, .action-button:hover {
+button[type="submit"]:hover, .action-button:hover, button[type="button"]:hover { /* Añadido button[type="button"]:hover */
     background-color: #0056b3;
 }
 
@@ -127,9 +127,9 @@ table {
 
 th, td {
     border: 1px solid #ddd;
-    padding: 10px 12px; /* Aumentado padding */
+    padding: 10px 12px;
     text-align: left;
-    font-size: 0.95em; /* Ligeramente más pequeño para caber más */
+    font-size: 0.95em;
     vertical-align: middle;
 }
 
@@ -153,10 +153,9 @@ tr:nth-child(even) {
     box-shadow: 0 2px 6px rgba(0,0,0,0.08);
 }
 
-/* Responsividad básica para la tabla */
 @media (max-width: 768px) {
     th, td {
-        font-size: 0.85em; /* Aún más pequeño en móviles */
+        font-size: 0.85em;
         padding: 8px;
     }
     header h1 {
