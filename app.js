@@ -378,39 +378,84 @@ async function cargarDatosParaGraficosEstadisticas() {
 
 // --- LÓGICA DEL CALENDARIO (FASE SIGUIENTE) ---
 async function inicializarOActualizarCalendario() {
-    console.log("app.js: inicializarOActualizarCalendario called.");
+    console.log("CALENDARIO: Iniciando inicializarOActualizarCalendario...");
     const calendarEl = document.getElementById('calendarioFullCalendar');
     if (!calendarEl) {
-        console.error("Elemento del calendario no encontrado.");
+        console.error("CALENDARIO: Elemento #calendarioFullCalendar NO encontrado en el DOM.");
         return;
     }
 
-    // 1. Obtener todas las programaciones de Firestore
-    // Esto implica una consulta de grupo de colección (collectionGroup)
+    calendarEl.innerHTML = '<p>Cargando calendario y programaciones...</p>';
+
+    if (!FullCalendar) {
+        console.error("CALENDARIO: FullCalendar no está definido. Revisa la etiqueta <script> en index.html.");
+        calendarEl.innerHTML = "<p>Error: Librería FullCalendar no cargada.</p>";
+        return;
+    }
+    console.log("CALENDARIO: FullCalendar está definido.");
+
     const programacionesEventos = [];
     try {
+        console.log("CALENDARIO: Intentando obtener programaciones desde Firestore...");
         const qProgramaciones = query(collectionGroup(db, 'programaciones'), orderBy('timestampCreacion', 'desc'));
         const snapshotProgramaciones = await getDocs(qProgramaciones);
-        
+        console.log(`CALENDARIO: Se encontraron ${snapshotProgramaciones.docs.length} documentos de programaciones.`);
+
+        if (snapshotProgramaciones.empty) {
+            // Si logCargaMasiva fue eliminada, usamos console.log o un log más simple.
+            // Por ahora, solo console.log para evitar más errores si logCargaMasiva no está.
+            console.log("CALENDARIO: No se encontraron programaciones en la base de datos.");
+        }
+
         for (const progDoc of snapshotProgramaciones.docs) {
             const progData = progDoc.data();
-            const requerimientoRef = progDoc.ref.parent.parent; // Referencia al documento padre (requerimiento)
-            let reqData = { req: 'N/A', cliente: 'N/A' }; // Default
+            const requerimientoRef = progDoc.ref.parent.parent;
+            let reqDataParaTitulo = { req: '?', cliente: '?' };
+
+            console.log(`CALENDARIO: Procesando programación ID: ${progDoc.id}, Fecha: ${progData.fechaProgramada}`);
+
             if (requerimientoRef) {
-                const reqSnap = await getDoc(requerimientoRef);
-                if (reqSnap.exists()) {
-                    reqData = reqSnap.data();
+                try {
+                    const reqSnap = await getDoc(requerimientoRef);
+                    if (reqSnap.exists()) {
+                        const rData = reqSnap.data();
+                        reqDataParaTitulo.req = rData.req || '?';
+                        reqDataParaTitulo.cliente = rData.cliente || '?';
+                    } else {
+                        console.warn(`CALENDARIO: Documento de requerimiento padre no encontrado para programación ${progDoc.id}`);
+                    }
+                } catch (errGetParent) {
+                    console.error(`CALENDARIO: Error obteniendo documento padre para programación ${progDoc.id}:`, errGetParent);
+                }
+            } else {
+                 console.warn(`CALENDARIO: No se pudo obtener la referencia al requerimiento padre para programación ${progDoc.id}`);
+            }
+
+            let startDateTime, endDateTime;
+            if (progData.fechaProgramada && progData.horaInicio) {
+                startDateTime = `${progData.fechaProgramada}T${progData.horaInicio}`;
+            } else {
+                console.warn(`CALENDARIO: Programación ${progDoc.id} sin fechaProgramada o horaInicio. Usando fecha actual como fallback.`);
+                startDateTime = new Date().toISOString().split('T')[0] + 'T00:00:00'; 
+            }
+
+            if (progData.fechaProgramada && progData.horaFin) {
+                endDateTime = `${progData.fechaProgramada}T${progData.horaFin}`;
+            } else if (startDateTime) {
+                console.warn(`CALENDARIO: Programación ${progDoc.id} sin horaFin. Asumiendo 1 hora de duración.`);
+                try {
+                    const startDateObj = new Date(startDateTime);
+                    startDateObj.setHours(startDateObj.getHours() + 1);
+                    endDateTime = startDateObj.toISOString().split('.')[0];
+                } catch (e) {
+                     endDateTime = startDateTime;
                 }
             }
 
-            // Combinar fecha y hora para FullCalendar (requiere que horaInicio/Fin sean válidas)
-            const startDateTime = `${progData.fechaProgramada}T${progData.horaInicio || '00:00'}:00`;
-            const endDateTime = `${progData.fechaProgramada}T${progData.horaFin || '23:59'}:00`;
-
             programacionesEventos.push({
-                id: progDoc.id, // ID de la programación
+                id: progDoc.id,
                 requerimientoId: requerimientoRef ? requerimientoRef.id : null,
-                title: `REQ: ${reqData.req || '??'} - ${progData.tipoTarea || 'Tarea'} (${reqData.cliente || '??'})`,
+                title: `REQ: ${reqDataParaTitulo.req} - ${progData.tipoTarea || 'Tarea'} (${reqDataParaTitulo.cliente})`,
                 start: startDateTime,
                 end: endDateTime,
                 extendedProps: {
@@ -418,62 +463,62 @@ async function inicializarOActualizarCalendario() {
                     estado: progData.estadoProgramacion || '',
                     notas: progData.notasProgramacion || ''
                 },
-                // Puedes añadir colores basados en estado o técnico
-                // backgroundColor: obtenerColorPorEstado(progData.estadoProgramacion), 
             });
         }
-        logCargaMasiva(`Se cargaron ${programacionesEventos.length} programaciones para el calendario.`);
+        console.log(`CALENDARIO: Se procesaron ${programacionesEventos.length} eventos para el calendario.`);
 
-} catch (error) {
-    console.error("CALENDARIO: Error obteniendo o procesando programaciones de Firestore:", error);
-    // logCargaMasiva("CALENDARIO: Error cargando datos para el calendario.", true); // <--- LÍNEA COMENTADA O ELIMINADA
-
-    calendarEl.innerHTML = "<p>Error al cargar datos para el calendario. Revisa la consola (F12).</p>";
-    if (error.message && error.message.toLowerCase().includes("index")) {
-        // Esta alerta es importante si el error es por el índice
-        alert("Error de Firestore: El índice necesario para el calendario aún no está listo o falta. Por favor, créalo usando el enlace de la consola y espera a que se habilite.");
+    } catch (error) {
+        console.error("CALENDARIO: Error obteniendo o procesando programaciones de Firestore:", error);
+        // LA LÍNEA QUE LLAMABA A logCargaMasiva HA SIDO ELIMINADA DE AQUÍ
+        if (calendarEl) { // Comprobamos que calendarEl exista
+             calendarEl.innerHTML = "<p>Error al cargar datos para el calendario. Revisa la consola (F12).</p>";
+        }
+        if (error.message && error.message.toLowerCase().includes("index")) {
+            alert("Error de Firestore: El índice necesario para el calendario aún no está listo o falta. Por favor, créalo usando el enlace de la consola y espera a que se habilite.");
+        }
+        return; 
     }
-    return; 
-}
 
-
-    // 2. Inicializar o actualizar FullCalendar
     if (calendarioFullCalendar) {
+        console.log("CALENDARIO: Actualizando eventos del calendario existente.");
         calendarioFullCalendar.removeAllEvents();
         calendarioFullCalendar.addEventSource(programacionesEventos);
-        // calendarioFullCalendar.refetchEvents(); // Otra forma si usas eventSources
-    } else if (FullCalendar) {
-        calendarioFullCalendar = new FullCalendar.Calendar(calendarEl, {
-            locale: 'es', // Para español
-            initialView: 'dayGridMonth', // Vista por defecto
-            headerToolbar: {
-                left: 'prev,next today',
-                center: 'title',
-                right: 'dayGridMonth,timeGridWeek,timeGridDay,listWeek' // Añadida vista de lista
-            },
-            events: programacionesEventos,
-            editable: false, // Poner a true si quieres drag & drop (requiere lógica de guardado)
-            selectable: true, // Permite seleccionar fechas/horas (para crear eventos, requiere lógica)
-            eventClick: function(info) {
-                // Mostrar detalles del evento/programación
-                let tecnicosStr = info.event.extendedProps.tecnicos ? info.event.extendedProps.tecnicos.join(', ') : 'No asignados';
-                alert(
-                    `Servicio: ${info.event.title}\n` +
-                    `Fecha: ${info.event.start ? info.event.start.toLocaleDateString('es-CL') : 'N/A'}\n` +
-                    `Hora: ${info.event.start ? info.event.start.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit'}) : ''} - ${info.event.end ? info.event.end.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit'}) : ''}\n` +
-                    `Técnicos: ${tecnicosStr}\n` +
-                    `Estado: ${info.event.extendedProps.estado || 'N/A'}\n` +
-                    `Notas: ${info.event.extendedProps.notas || ''}`
-                );
-                // Aquí podrías abrir el modal de edición de programaciones si lo deseas
-                // gestionarProgramaciones(info.event.extendedProps.requerimientoId, "REQ del evento");
-            },
-            // Puedes añadir más opciones, como select para crear nuevas programaciones, etc.
-        });
-        calendarioFullCalendar.render();
-    } else {
-        console.error("FullCalendar no está cargado.");
-        calendarEl.innerHTML = "<p>Error al cargar el calendario. Librería FullCalendar no encontrada.</p>";
+    } else if (FullCalendar && calendarEl) { // Comprobamos que calendarEl exista
+        console.log("CALENDARIO: Creando nueva instancia de FullCalendar.");
+        try {
+            calendarioFullCalendar = new FullCalendar.Calendar(calendarEl, {
+                locale: 'es',
+                initialView: 'dayGridMonth',
+                headerToolbar: {
+                    left: 'prev,next today',
+                    center: 'title',
+                    right: 'dayGridMonth,timeGridWeek,timeGridDay,listWeek'
+                },
+                events: programacionesEventos,
+                editable: false, 
+                selectable: true,
+                contentHeight: 'auto',
+                eventClick: function(info) {
+                    let tecnicosStr = info.event.extendedProps.tecnicos ? info.event.extendedProps.tecnicos.join(', ') : 'No asignados';
+                    alert(
+                        `Servicio: ${info.event.title}\n` +
+                        `Fecha: ${info.event.start ? info.event.start.toLocaleDateString('es-CL', {day: '2-digit', month: '2-digit', year: 'numeric'}) : 'N/A'}\n` +
+                        `Hora: ${info.event.start ? info.event.start.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit'}) : ''} - ${info.event.end ? info.event.end.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit'}) : ''}\n` +
+                        `Técnicos: ${tecnicosStr}\n` +
+                        `Estado: ${info.event.extendedProps.estado || 'N/A'}\n` +
+                        `Notas: ${info.event.extendedProps.notas || ''}`
+                    );
+                },
+            });
+            calendarioFullCalendar.render();
+            console.log("CALENDARIO: Calendario renderizado.");
+        } catch (e) {
+            console.error("CALENDARIO: Error CRÍTICO al inicializar FullCalendar:", e);
+            calendarEl.innerHTML = "<p>Error fatal al inicializar el calendario. Revisa la consola.</p>";
+        }
+    } else if (!FullCalendar) {
+         console.error("CALENDARIO: FullCalendar no está cargado.");
+         if (calendarEl) calendarEl.innerHTML = "<p>Error al cargar el calendario. Librería FullCalendar no encontrada.</p>";
     }
 }
 
