@@ -236,3 +236,17 @@ td .action-button { padding: 5px 8px; font-size: 0.8em; margin-right: 4px; }
     padding: initial !important; /* Resetear padding si hereda alguno no deseado */
     margin-bottom: initial !important; /* Resetear margen si hereda alguno no deseado */
 }
+/* En style.css */
+#tablaRequerimientos thead th[onclick] {
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+#tablaRequerimientos thead th[onclick]:hover {
+    background-color: #d8e0e3; /* Un color de hover un poco más oscuro que el fondo de th */
+}
+
+#tablaRequerimientos thead th .sort-arrow { /* Para un indicador de orden más avanzado */
+    margin-left: 5px;
+    font-size: 0.8em;
+}
