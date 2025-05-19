@@ -78,8 +78,8 @@ formRequerimiento.addEventListener('submit', async (e) => {
     const idRequerimiento = formRequerimiento.dataset.editingId;
 
     const requerimiento = {
-        fecha: document.getElementById('fecha').value, // Fecha principal
-        fechaRecepcionMontaje: document.getElementById('fechaRecepcionMontaje').value || null, // Nuevo campo, guardar null si está vacío
+        fecha: document.getElementById('fecha').value, 
+        fechaRecepcionMontaje: document.getElementById('fechaRecepcionMontaje').value || null,
         req: document.getElementById('req').value,
         nv: document.getElementById('nv').value,
         canalEntrada: document.getElementById('canalEntrada').value,
@@ -93,7 +93,6 @@ formRequerimiento.addEventListener('submit', async (e) => {
         tipoEquipo: document.getElementById('tipoEquipo').value,
         observacion: document.getElementById('observacion').value,
         solicitante: document.getElementById('solicitante').value,
-        // timestamp se maneja abajo
     };
 
     try {
@@ -196,7 +195,7 @@ async function editarRequerimiento(id) {
         if (docSnap.exists()) {
             const data = docSnap.data();
             document.getElementById('fecha').value = data.fecha || '';
-            document.getElementById('fechaRecepcionMontaje').value = data.fechaRecepcionMontaje || ''; // NUEVA LÍNEA
+            document.getElementById('fechaRecepcionMontaje').value = data.fechaRecepcionMontaje || '';
             document.getElementById('req').value = data.req || '';
             document.getElementById('nv').value = data.nv || '';
             document.getElementById('canalEntrada').value = data.canalEntrada || '';
@@ -388,8 +387,8 @@ async function procesarYSubirDatosSimple(registros, cabecerasDetectadas) {
     const mapeoCsvAFirestore = {
         // Asegúrate que el orden aquí coincida con el que le dijiste al usuario en index.html
         // Y que estas claves coincidan con las cabeceras de su CSV (después de .trim())
-        "FECHA_RECEPCION_MONTAJE": "fechaRecepcionMontaje", // NUEVA CABECERA CSV Y CAMPO FIRESTORE
-        "FECHA": "fecha", // Fecha principal
+        "FECHA_RECEPCION_MONTAJE": "fechaRecepcionMontaje",
+        "FECHA": "fecha", 
         "REQ": "req",
         "NV": "nv",
         "CANAL DE ENTRADA": "canalEntrada",
