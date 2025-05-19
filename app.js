@@ -86,6 +86,156 @@ function mostrarVista(idVista) {
 }
 window.mostrarVista = mostrarVista;
 
+// Cerca del inicio de app.js
+let datosOriginalesRequerimientos = []; // Para guardar los datos sin ordenar
+let ordenActual = {
+    columna: 'timestamp', // Campo por defecto para la ordenación inicial de Firebase
+    direccion: 'desc' // 'asc' o 'desc'
+};
+
+// Nueva función para ordenar
+function ordenarTablaPorColumna(indiceColumna, nombreCampoFirestore) {
+    const nuevaDireccion = (ordenActual.columna === nombreCampoFirestore && ordenActual.direccion === 'asc') ? 'desc' : 'asc';
+    ordenActual.columna = nombreCampoFirestore;
+    ordenActual.direccion = nuevaDireccion;
+
+    // Reordenar datosOriginalesRequerimientos
+    datosOriginalesRequerimientos.sort((a, b) => {
+        let valA = a[nombreCampoFirestore];
+        let valB = b[nombreCampoFirestore];
+
+        // Manejar fechas (asumiendo formato YYYY-MM-DD)
+        if (nombreCampoFirestore.toLowerCase().includes('fecha')) {
+            // Convertir a objetos Date para comparación correcta, o comparar como strings si el formato es consistente
+            // Si son strings YYYY-MM-DD, la comparación directa de strings funciona bien.
+            // Si son null o vacíos, tratarlos como menores o mayores según la dirección.
+            if (valA === null || valA === '') valA = nuevaDireccion === 'asc' ? '9999-99-99' : '0000-00-00';
+            if (valB === null || valB === '') valB = nuevaDireccion === 'asc' ? '9999-99-99' : '0000-00-00';
+        } else if (typeof valA === 'string') {
+            valA = valA.toUpperCase();
+            valB = valB.toUpperCase();
+        } else if (typeof valA === 'number' && typeof valB === 'number') {
+            // Comparación numérica directa
+        } else { // Si son tipos mixtos o no comparables directamente, convertir a string
+            valA = String(valA).toUpperCase();
+            valB = String(valB).toUpperCase();
+        }
+
+
+        if (valA < valB) {
+            return nuevaDireccion === 'asc' ? -1 : 1;
+        }
+        if (valA > valB) {
+            return nuevaDireccion === 'asc' ? 1 : -1;
+        }
+        return 0; // Son iguales
+    });
+
+    // Volver a renderizar la tabla con los datos ordenados
+    renderizarTablaRequerimientos(datosOriginalesRequerimientos);
+
+    // Actualizar indicador visual en cabeceras (opcional avanzado)
+    actualizarIndicadoresDeOrdenVisual(indiceColumna, nuevaDireccion);
+}
+window.ordenarTablaPorColumna = ordenarTablaPorColumna;
+
+function actualizarIndicadoresDeOrdenVisual(columnaActiva, direccion) {
+    const cabeceras = document.querySelectorAll('#tablaRequerimientos thead th[onclick]');
+    cabeceras.forEach((th, index) => {
+        let textoOriginal = th.textContent.replace(/ ↓| ↑| ⇅/g, ''); // Quitar flechas anteriores
+        if (index === columnaActiva) {
+            textoOriginal += (direccion === 'asc' ? ' ↑' : ' ↓');
+        } else {
+             textoOriginal += ' \u21C5'; // Flecha arriba-abajo ⇅
+        }
+        th.innerHTML = textoOriginal; // Usar innerHTML si tienes entidades como &#8645;
+    });
+}
+
+
+// Modificar cargarRequerimientos para guardar los datos y luego renderizar
+async function cargarRequerimientos() {
+    console.log("app.js: cargarRequerimientos called.");
+    if (!tablaRequerimientosBody) { /* ... manejo de error ... */ return; }
+    const NUMERO_COLUMNAS_TABLA_REQUERIMIENTOS = 10;
+    tablaRequerimientosBody.innerHTML = `<tr><td colspan="${NUMERO_COLUMNAS_TABLA_REQUERIMIENTOS}">Cargando...</td></tr>`;
+
+    try {
+        // La consulta inicial a Firebase puede seguir siendo ordenada por timestamp
+        // o por la columna/dirección actualmente seleccionada si quieres que la carga inicial ya venga ordenada.
+        // Por simplicidad, la dejaremos por timestamp y el ordenamiento se hará en el cliente.
+        const q = query(requerimientosCollectionRef, orderBy("timestamp", "desc"));
+        const querySnapshot = await getDocs(q);
+        
+        datosOriginalesRequerimientos = []; // Limpiar datos anteriores
+        if (!querySnapshot.empty) {
+            querySnapshot.forEach(docSnap => {
+                datosOriginalesRequerimientos.push({ id: docSnap.id, ...docSnap.data() });
+            });
+        }
+        
+        // Aplicar el orden actual (si no es el de timestamp por defecto)
+        if (ordenActual.columna !== 'timestamp' || ordenActual.direccion !== 'desc') {
+            // Forzar una reordenación inicial si el orden actual no es el de firebase
+            const thActivo = Array.from(document.querySelectorAll('#tablaRequerimientos thead th[onclick]'))
+                                .findIndex(th => th.getAttribute('onclick').includes(`'${ordenActual.columna}'`));
+            if (thActivo !== -1) {
+                // Simular un clic para reordenar, pero invirtiendo la dirección para que el primer clic real la ponga bien
+                const dirInversa = ordenActual.direccion === 'asc' ? 'desc' : 'asc';
+                const ordenAnteriorTemporal = { ...ordenActual, direccion: dirInversa }; 
+                ordenarTablaPorColumna(thActivo, ordenActual.columna); // Esto aplicará ordenActual.direccion
+                ordenActual = ordenAnteriorTemporal; // Restaurar para que el próximo clic funcione como se espera
+                 ordenarTablaPorColumna(thActivo, ordenActual.columna); // Aplicar el orden deseado
+            } else {
+                 renderizarTablaRequerimientos(datosOriginalesRequerimientos); // Renderizar con orden de Firebase
+            }
+        } else {
+            renderizarTablaRequerimientos(datosOriginalesRequerimientos);
+             actualizarIndicadoresDeOrdenVisual(-1, ''); // Limpiar flechas o poner la por defecto
+        }
+
+    } catch (error) {
+        console.error("Error al cargar requerimientos:", error);
+        tablaRequerimientosBody.innerHTML = `<tr><td colspan="${NUMERO_COLUMNAS_TABLA_REQUERIMIENTOS}">Error al cargar datos.</td></tr>`;
+    }
+}
+window.cargarRequerimientos = cargarRequerimientos; // Asegúrate que siga siendo global
+
+// NUEVA función para renderizar la tabla (separada de la obtención de datos)
+function renderizarTablaRequerimientos(datos) {
+    if (!tablaRequerimientosBody) { return; }
+    const NUMERO_COLUMNAS_TABLA_REQUERIMIENTOS = 10; // Asegúrate que este número sea correcto
+    let html = '';
+    if (!datos || datos.length === 0) {
+        html = `<tr><td colspan="${NUMERO_COLUMNAS_TABLA_REQUERIMIENTOS}">No hay servicios registrados.</td></tr>`;
+    } else {
+        datos.forEach(data => { // Ahora 'data' ya incluye el 'id'
+            html += `
+                <tr data-id="${data.id}">
+                    <td>${formatearFechaDesdeYYYYMMDD(data.fechaRecepcion)}</td>
+                    <td>${data.req || ''}</td>
+                    <td>${data.cliente || ''}</td>
+                    <td>${data.asunto ? (data.asunto.length > 30 ? data.asunto.substring(0,27)+'...' : data.asunto) : ''}</td>
+                    <td>${data.localidad || ''}</td>
+                    <td>${data.estatusRequerimiento || ''}</td>
+                    <td>${formatearFechaDesdeYYYYMMDD(data.fechaTerminoServicio)}</td>
+                    <td>${data.solicitante || ''}</td>
+                    <td>
+                        <button class="action-button edit" onclick="window.editarRequerimiento('${data.id}')">Editar</button>
+                        <button class="action-button delete" onclick="window.eliminarRequerimiento('${data.id}')">Eliminar</button>
+                    </td>
+                    <td>
+                        <button class="action-button" onclick="window.gestionarProgramaciones('${data.id}', '${data.req || 'Servicio'}')">Programar</button>
+                    </td>
+                </tr>
+            `;
+        });
+    }
+    tablaRequerimientosBody.innerHTML = html;
+    // Limpiar el buscador cuando se recarga/reordena la tabla
+    const buscador = document.getElementById('buscadorServicios');
+    if (buscador) buscador.value = ""; 
+}
 // --- FUNCIONES AUXILIARES ---
 function formatearFechaDesdeYYYYMMDD(fechaString) {
     if (!fechaString || !/^\d{4}-\d{2}-\d{2}$/.test(fechaString)) {
