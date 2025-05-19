@@ -206,7 +206,13 @@
                     </div>
                     <div>
                         <label for="modalTipoTarea">Tipo de Tarea/Servicio:</label>
-                        <input type="text" id="modalTipoTarea" placeholder="Ej: Instalación, Mantención" required>
+                        <select id="modalTipoTarea" required>
+                            <option value="">Seleccione un tipo...</option> {/* Opción por defecto */}
+                            <option value="ADICIONAL DE MONTAJE">ADICIONAL DE MONTAJE</option>
+                            <option value="MONTAJE">MONTAJE</option>
+                            <option value="PREMONTAJE">PREMONTAJE</option>
+                            <option value="PUESTA EN MARCHA TECNICA">PUESTA EN MARCHA TECNICA</option>
+                        </select>
                     </div>
                 </div>
                 <div class="form-grid">
