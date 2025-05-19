@@ -8,17 +8,19 @@
 
     {/* --- SCRIPTS DE FULLCALENDAR --- */}
     {/* Locales (los que SÍ tienes en tu carpeta fullcalendar_libs) */}
+    {/* Asegúrate que estos archivos existen y son la versión correcta/compatible */}
     <script src='fullcalendar_libs/fullcalendar-core.global.min.js'></script>
     <script src='fullcalendar_libs/fullcalendar-interaction.global.min.js'></script>
     <script src='fullcalendar_libs/fullcalendar-daygrid.global.min.js'></script>
     <script src='fullcalendar_libs/fullcalendar-timegrid.global.min.js'></script>
     <script src='fullcalendar_libs/fullcalendar-list.global.min.js'></script>
-    
-    {/* Plugins de RESOURCE desde CDN (versión 6.1.17 para coincidir) */}
-    <script src='https://cdn.jsdelivr.net/npm/@fullcalendar/resource-common@6.1.17/index.global.min.js'></script>
-    <script src='https://cdn.jsdelivr.net/npm/@fullcalendar/resource-timegrid@6.1.17/index.global.min.js'></script>
+
+    {/* Plugins de RESOURCE desde CDN (versión 6.1.17 para coincidir) - ELIMINADOS TEMPORALMENTE */}
+    {/* Si no usas vistas de RECURSOS, estos no son necesarios y podrían causar el error 'Internal' */}
+    {/* <script src='https://cdn.jsdelivr.net/npm/@fullcalendar/resource-common@6.1.17/index.global.min.js'></script> */}
+    {/* <script src='https://cdn.jsdelivr.net/npm/@fullcalendar/resource-timegrid@6.1.17/index.global.min.js'></script> */}
     {/* <script src='https://cdn.jsdelivr.net/npm/@fullcalendar/resource-daygrid@6.1.17/index.global.min.js'></script> */}
-    
+
     {/* Otros scripts */}
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
@@ -64,10 +66,10 @@
                         </select>
                     </div>
                 </div>
-                
+
                 <label for="cliente">CLIENTE:</label>
                 <input type="text" id="cliente" required>
-                
+
                 <label for="direccion">DIRECCIÓN:</label>
                 <input type="text" id="direccion">
 
@@ -81,7 +83,7 @@
                         <input type="text" id="solicitante">
                     </div>
                 </div>
-                
+
                 <label for="asunto">ASUNTO / DESCRIPCIÓN DEL SERVICIO:</label>
                 <textarea id="asunto" required rows="3"></textarea>
 
@@ -111,7 +113,7 @@
                         {/* Espacio libre o para otro campo futuro */}
                     </div>
                 </div>
-                
+
                 <label for="observacionRequerimiento">OBSERVACIONES GENERALES DEL SERVICIO:</label>
                 <textarea id="observacionRequerimiento" rows="3"></textarea>
 
@@ -123,23 +125,24 @@
         <section id="vista-visualizacion" style="display:none;">
             <h2>Listado de Servicios Registrados</h2>
             <div style="margin-bottom: 1rem;">
-    <label for="buscadorServicios" style="margin-right: 0.5rem; font-weight:normal;">Buscar en servicios:</label>
-    <input type="text" id="buscadorServicios" onkeyup="filtrarTablaServicios()" placeholder="Escribe para buscar...">
-</div>
+                <label for="buscadorServicios" style="margin-right: 0.5rem; font-weight:normal;">Buscar en servicios:</label>
+                <input type="text" id="buscadorServicios" onkeyup="window.filtrarTablaServicios()" placeholder="Escribe para buscar...">
+            </div>
             <div class="table-container">
                 <table id="tablaRequerimientos">
                     <thead>
                         <tr>
-<th onclick="ordenarTablaPorColumna(0, 'fechaRecepcion')">F. Recepción &#8645;</th>
-<th onclick="ordenarTablaPorColumna(1, 'req')">REQ/OT &#8645;</th>
-<th onclick="ordenarTablaPorColumna(2, 'cliente')">Cliente &#8645;</th>
-<th onclick="ordenarTablaPorColumna(3, 'asunto')">Asunto &#8645;</th>
-<th onclick="ordenarTablaPorColumna(4, 'localidad')">Localidad &#8645;</th>
-<th onclick="ordenarTablaPorColumna(5, 'estatusRequerimiento')">Estatus Servicio &#8645;</th>
-<th onclick="ordenarTablaPorColumna(6, 'fechaTerminoServicio')">F. Término Serv. &#8645;</th>
-<th onclick="ordenarTablaPorColumna(7, 'solicitante')">Solicitante &#8645;</th>
-<th>Acciones</th> {/* No se ordena por acciones */}
-<th>Programaciones</th> {/* No se ordena por programaciones */}
+                            {/* onclick llama a funciones globales expuestas en window */}
+                            <th onclick="window.ordenarTablaPorColumna(0, 'fechaRecepcion')">F. Recepción <span class="sort-arrow">⇅</span></th>
+                            <th onclick="window.ordenarTablaPorColumna(1, 'req')">REQ/OT <span class="sort-arrow">⇅</span></th>
+                            <th onclick="window.ordenarTablaPorColumna(2, 'cliente')">Cliente <span class="sort-arrow">⇅</span></th>
+                            <th onclick="window.ordenarTablaPorColumna(3, 'asunto')">Asunto <span class="sort-arrow">⇅</span></th>
+                            <th onclick="window.ordenarTablaPorColumna(4, 'localidad')">Localidad <span class="sort-arrow">⇅</span></th>
+                            <th onclick="window.ordenarTablaPorColumna(5, 'estatusRequerimiento')">Estatus Servicio <span class="sort-arrow">⇅</span></th>
+                            <th onclick="window.ordenarTablaPorColumna(6, 'fechaTerminoServicio')">F. Término Serv. <span class="sort-arrow">⇅</span></th>
+                            <th onclick="window.ordenarTablaPorColumna(7, 'solicitante')">Solicitante <span class="sort-arrow">⇅</span></th>
+                            <th>Acciones</th> {/* No se ordena por acciones */}
+                            <th>Programaciones</th> {/* No se ordena por programaciones */}
                         </tr>
                     </thead>
                     <tbody>
@@ -182,6 +185,8 @@
         <section id="vista-carga-masiva" style="display:none;">
             <h2>Carga Masiva (Actualmente Deshabilitada)</h2>
             <p>Esta funcionalidad necesita ser rediseñada para la nueva estructura de datos.</p>
+            <input type="file" id="csvFile" accept=".csv">
+            <button id="btnProcesarCsv">Procesar CSV (Deshabilitado)</button>
         </section>
         */}
     </main>
@@ -190,7 +195,7 @@
         <div class="modal-content">
             <span class="close-button" onclick="window.cerrarModalProgramaciones()">&times;</span>
             <h3 id="modalTituloRequerimiento">Gestionar Programaciones para REQ: </h3>
-            
+
             <h4>Añadir Nueva Programación</h4>
             <form id="formAddProgramacion">
                 <input type="hidden" id="currentRequerimientoId">
@@ -214,12 +219,12 @@
                         <input type="time" id="modalHoraFin" required>
                     </div>
                 </div>
-                
+
                 <label for="modalTecnicosCheckboxContainer">Técnico(s) Asignado(s) (Selecciona uno o más):</label>
                 <div id="modalTecnicosCheckboxContainer" class="checkbox-container">
                     <p>Cargando técnicos...</p>
                 </div>
-                
+
                 <label for="modalEstadoProgramacion">Estado de esta Programación:</label>
                 <select id="modalEstadoProgramacion">
                     <option value="Programado">Programado</option>
@@ -231,13 +236,13 @@
                     <option value="Cancelado">Cancelado</option>
                     <option value="Reprogramar">Reprogramar</option>
                 </select>
-                
+
                 <label for="modalNotasProgramacion">Notas Adicionales para esta Programación:</label>
                 <textarea id="modalNotasProgramacion" rows="2"></textarea>
-                
+
                 <button type="submit">Guardar Programación</button>
             </form>
-            
+
             <hr>
             <h4>Programaciones Existentes:</h4>
             <div id="listaProgramacionesContainer">
