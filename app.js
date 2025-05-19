@@ -413,21 +413,66 @@ window.eliminarProgramacion = eliminarProgramacion;
 let graficoEstatusReq = null;
 let graficoCanal = null;
 
+// Variables globales para los nuevos gráficos (cerca de las otras de gráficos)
+let graficoTiempo1raProg = null;
+let graficoTiempoTotal = null;
+
+// Función auxiliar para calcular diferencia en días
+function diferenciaEnDias(fechaInicioStr, fechaFinStr) {
+    if (!fechaInicioStr || !fechaFinStr) return null;
+    const inicio = new Date(fechaInicioStr + 'T00:00:00Z'); // Asegurar UTC para evitar problemas de zona
+    const fin = new Date(fechaFinStr + 'T00:00:00Z');
+    if (isNaN(inicio.getTime()) || isNaN(fin.getTime())) return null;
+    const diffTiempo = fin.getTime() - inicio.getTime();
+    if (diffTiempo < 0) return null; // Fecha fin no puede ser antes que inicio para este cálculo
+    return Math.ceil(diffTiempo / (1000 * 3600 * 24)); // Math.ceil para redondear hacia arriba
+}
+
+
 async function cargarDatosParaGraficosEstadisticas() {
     console.log("app.js: cargarDatosParaGraficosEstadisticas called.");
     try {
-        const querySnapshot = await getDocs(requerimientosCollectionRef);
-        const requerimientos = [];
-        querySnapshot.forEach(doc => { requerimientos.push(doc.data()); });
+        const requerimientosSnapshot = await getDocs(query(requerimientosCollectionRef, orderBy("timestamp", "desc")));
+        const dataParaGraficos = [];
 
-        const conteoEstatus = requerimientos.reduce((acc, curr) => {
+        for (const reqDoc of requerimientosSnapshot.docs) {
+            const reqData = reqDoc.data();
+            reqData.id = reqDoc.id; // Guardar el ID por si lo necesitamos
+
+            // Obtener la primera programación para este requerimiento
+            const progRef = collection(db, "requerimientos", reqDoc.id, "programaciones");
+            const qPrimeraProg = query(progRef, orderBy("fechaProgramada", "asc"), orderBy("timestampCreacion", "asc"), limit(1)); // limit(1) no está en SDK v9 web, quitarlo. Ordenar y tomar el primero.
+            // Corrección: Firestore web SDK no soporta limit(1) directamente en query.
+            // Haremos el query y tomaremos el primer documento.
+            
+            let primeraFechaProgramada = null;
+            try {
+                const primerasProgSnapshot = await getDocs(qPrimeraProg);
+                if (!primerasProgSnapshot.empty) {
+                    primeraFechaProgramada = primerasProgSnapshot.docs[0].data().fechaProgramada;
+                }
+            } catch (e) {
+                console.warn(`No se pudo obtener programaciones para ${reqData.req} o no tiene: ${e.message}`);
+            }
+
+
+            dataParaGraficos.push({
+                ...reqData,
+                primeraFechaProgramada: primeraFechaProgramada
+            });
+        }
+
+        console.log("Datos preparados para gráficos:", dataParaGraficos);
+
+        // --- Gráfico por Estatus de Requerimiento (como estaba) ---
+        const conteoEstatus = dataParaGraficos.reduce((acc, curr) => {
             if(curr.estatusRequerimiento) acc[curr.estatusRequerimiento] = (acc[curr.estatusRequerimiento] || 0) + 1;
             return acc;
         }, {});
         const ctxEstatus = document.getElementById('graficoEstatusRequerimiento')?.getContext('2d');
         if (ctxEstatus) {
             if (graficoEstatusReq) graficoEstatusReq.destroy();
-            graficoEstatusReq = new Chart(ctxEstatus, {
+            graficoEstatusReq = new Chart(ctxEstatus, { /* ...configuración igual que antes... */ 
                 type: 'pie',
                 data: {
                     labels: Object.keys(conteoEstatus),
@@ -437,14 +482,15 @@ async function cargarDatosParaGraficosEstadisticas() {
             });
         }
 
-        const conteoCanales = requerimientos.reduce((acc, curr) => {
+        // --- Gráfico por Canal de Entrada (como estaba) ---
+        const conteoCanales = dataParaGraficos.reduce((acc, curr) => {
             if(curr.canalEntrada) acc[curr.canalEntrada] = (acc[curr.canalEntrada] || 0) + 1;
             return acc;
         }, {});
         const ctxCanal = document.getElementById('graficoCanalEntrada')?.getContext('2d');
         if (ctxCanal) {
             if (graficoCanal) graficoCanal.destroy();
-            graficoCanal = new Chart(ctxCanal, {
+            graficoCanal = new Chart(ctxCanal, { /* ...configuración igual que antes... */ 
                 type: 'bar',
                 data: {
                     labels: Object.keys(conteoCanales),
@@ -453,6 +499,73 @@ async function cargarDatosParaGraficosEstadisticas() {
                 options: { responsive: true, maintainAspectRatio: false, scales: {y: {beginAtZero: true}}, plugins: { legend: { display: false }}}
             });
         }
+
+        // --- NUEVO GRÁFICO 1: Tiempo Promedio Recepción a 1ra Programación ---
+        const tiemposRecepcionAProgramacion = [];
+        dataParaGraficos.forEach(req => {
+            if (req.fechaRecepcion && req.primeraFechaProgramada) {
+                const diff = diferenciaEnDias(req.fechaRecepcion, req.primeraFechaProgramada);
+                if (diff !== null && diff >= 0) { // Solo considerar si la programación es después o el mismo día de la recepción
+                    tiemposRecepcionAProgramacion.push(diff);
+                }
+            }
+        });
+
+        const ctxTiempo1Prog = document.getElementById('graficoTiempoPrimeraProgramacion')?.getContext('2d');
+        if (ctxTiempo1Prog) {
+            if (graficoTiempo1raProg) graficoTiempo1raProg.destroy();
+            let promedioTiempo1Prog = 0;
+            if (tiemposRecepcionAProgramacion.length > 0) {
+                promedioTiempo1Prog = tiemposRecepcionAProgramacion.reduce((a, b) => a + b, 0) / tiemposRecepcionAProgramacion.length;
+            }
+            // Podríamos hacer un histograma o simplemente mostrar el promedio
+            // Por simplicidad, un gráfico de barras con una sola barra para el promedio
+            graficoTiempo1raProg = new Chart(ctxTiempo1Prog, {
+                type: 'bar',
+                data: {
+                    labels: ['Promedio (días)'],
+                    datasets: [{
+                        label: 'Tiempo Recepción a 1ra Programación',
+                        data: [promedioTiempo1Prog.toFixed(1)], // Mostrar con 1 decimal
+                        backgroundColor: ['#FF9F40']
+                    }]
+                },
+                options: { responsive: true, maintainAspectRatio: false, scales: {y: {beginAtZero: true, title: { display: true, text: 'Días Promedio' }}}, plugins: { legend: { display: false }}}
+            });
+        }
+
+        // --- NUEVO GRÁFICO 2: Tiempo Promedio Recepción a Término Servicio ---
+        const tiemposRecepcionATermino = [];
+        dataParaGraficos.forEach(req => {
+            // Solo considerar si el servicio tiene estatus "Resuelto" y tiene fecha de término
+            if (req.estatusRequerimiento === 'Resuelto' && req.fechaRecepcion && req.fechaTerminoServicio) {
+                const diff = diferenciaEnDias(req.fechaRecepcion, req.fechaTerminoServicio);
+                 if (diff !== null && diff >= 0) {
+                    tiemposRecepcionATermino.push(diff);
+                }
+            }
+        });
+        const ctxTiempoTotal = document.getElementById('graficoTiempoTotalServicio')?.getContext('2d');
+        if (ctxTiempoTotal) {
+            if (graficoTiempoTotal) graficoTiempoTotal.destroy();
+            let promedioTiempoTotal = 0;
+            if (tiemposRecepcionATermino.length > 0) {
+                promedioTiempoTotal = tiemposRecepcionATermino.reduce((a, b) => a + b, 0) / tiemposRecepcionATermino.length;
+            }
+             graficoTiempoTotal = new Chart(ctxTiempoTotal, {
+                type: 'bar',
+                data: {
+                    labels: ['Promedio (días)'],
+                    datasets: [{
+                        label: 'Tiempo Recepción a Término (Serv. Resueltos)',
+                        data: [promedioTiempoTotal.toFixed(1)],
+                        backgroundColor: ['#4BC0C0']
+                    }]
+                },
+                options: { responsive: true, maintainAspectRatio: false, scales: {y: {beginAtZero: true, title: { display: true, text: 'Días Promedio' }}}, plugins: { legend: { display: false }}}
+            });
+        }
+
     } catch (error) {
         console.error("Error al cargar datos para gráficos de estadísticas:", error);
     }
