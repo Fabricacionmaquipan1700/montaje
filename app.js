@@ -359,89 +359,82 @@ async function handleFileUpload() {
         }
     });
 }
-async function procesarYSubirDatos(registros, cabecerasDetectadasOriginalmente) {
-    // Definición de las cabeceras ESPERADAS y su mapeo a claves de Firestore
-    // Las CLAVES de este objeto son las que BUSCAREMOS (normalizadas: mayúsculas, sin espacios extra)
-const mapeoColumnasEsperadas = {
-    "FECHA_RECEPCION_MONTAJE": "fechaRecepcionMontaje", "FECHA": "fecha", "REQ": "req", "NV": "nv", "CANALDEENTRADA": "canalEntrada",
-    "ASUNTO": "asunto", "LOCALIDAD": "localidad", "CLIENTE": "cliente",
-    "DIRECCION": "direccion",       // <--- CAMBIO AQUÍ (normalizada y sin tilde)
-    "TECNICO": "tecnico", "HORARIO": "horario", "ESTATUS": "estatus", "TIPODEEQUIPO": "tipoEquipo",
-    "OBSERVACION": "observacion",   // <--- CAMBIO AQUÍ (normalizada y sin tilde)
-    "SOLICITANTE": "solicitante"
-};
-    // Log de cabeceras detectadas originalmente por PapaParse (si las hay)
-    if (cabecerasDetectadasOriginalmente && cabecerasDetectadasOriginalmente.length > 0) {
-        logCargaMasiva(`Cabeceras detectadas originalmente por PapaParse: ${cabecerasDetectadasOriginalmente.join(' | ')}`);
-    }
-
+async function procesarYSubirDatosSimple(registros, cabecerasDetectadas) {
+    const mapeoCsvAFirestore = {
+        // Asegúrate que el orden aquí coincida con el que le dijiste al usuario en index.html
+        // Y que estas claves coincidan con las cabeceras de su CSV (después de .trim())
+        "FECHA_RECEPCION_MONTAJE": "fechaRecepcionMontaje", // NUEVA CABECERA CSV Y CAMPO FIRESTORE
+        "FECHA": "fecha", // Fecha principal
+        "REQ": "req",
+        "NV": "nv",
+        "CANAL DE ENTRADA": "canalEntrada",
+        "ASUNTO": "asunto",
+        "LOCALIDAD": "localidad",
+        "CLIENTE": "cliente",
+        "DIRECCION": "direccion", // Sin tilde aquí, como lo corregimos antes
+        "TECNICO": "tecnico",
+        "HORARIO": "horario",
+        "ESTATUS": "estatus",
+        "TIPO DE EQUIPO": "tipoEquipo",
+        "OBSERVACION": "observacion", // Sin tilde aquí
+        "SOLICITANTE": "solicitante"
+    };
 
     const registrosParaFirestore = [];
     let erroresDeFormato = 0;
 
+    logCargaMasiva(`Procesando ${registros.length} filas de datos...`);
+
     for (let i = 0; i < registros.length; i++) {
-        const filaCsvOriginal = registros[i]; // Objeto con claves tal como las parseó PapaParse
-        const filaCsvNormalizada = {}; // Nuevo objeto donde pondremos claves normalizadas
-
-        // Normalizar las claves del objeto filaCsvOriginal
-        for (const keyOriginal in filaCsvOriginal) {
-            if (filaCsvOriginal.hasOwnProperty(keyOriginal)) {
-                // Normalizar: a mayúsculas, quitar espacios múltiples y de los extremos, quitar tildes comunes para claves
-                const keyNormalizada = keyOriginal
-                    .toUpperCase()
-                    .replace(/\s+/g, '') // Quitar todos los espacios
-                    .replace(/[ÁÀÄÂ]/g, 'A').replace(/[ÉÈËÊ]/g, 'E')
-                    .replace(/[ÍÌÏÎ]/g, 'I').replace(/[ÓÒÖÔ]/g, 'O')
-                    .replace(/[ÚÙÜÛ]/g, 'U');
-                filaCsvNormalizada[keyNormalizada] = filaCsvOriginal[keyOriginal];
-            }
-        }
-        // Log de la fila normalizada para depuración (puedes comentarlo después)
-        // logCargaMasiva(`Fila ${i+1} - Claves normalizadas: ${Object.keys(filaCsvNormalizada).join(', ')}`);
-
-
+        const filaCsv = registros[i];
         const nuevoRequerimiento = {};
         let filaValida = true;
 
-        for (const nombreColumnaEsperadaNormalizada in mapeoColumnasEsperadas) {
-            const claveFirestore = mapeoColumnasEsperadas[nombreColumnaEsperadaNormalizada];
-            let valor = filaCsvNormalizada[nombreColumnaEsperadaNormalizada]; // Buscar con la clave normalizada
+        for (const cabeceraCsvEsperada in mapeoCsvAFirestore) {
+            const claveFirestore = mapeoCsvAFirestore[cabeceraCsvEsperada];
+            let valor = filaCsv[cabeceraCsvEsperada];
 
             if (valor === undefined) {
-                if (Object.keys(filaCsvNormalizada).length > 0) { // Solo advertir si la fila tiene algún dato
-                     logCargaMasiva(`Advertencia Fila ${i + 1}: Columna "${nombreColumnaEsperadaNormalizada}" no encontrada tras normalización. Se usará valor vacío.`, true);
-                }
+                logCargaMasiva(`Advertencia Fila <span class="math-inline">\{i \+ 1\}\: Cabecera CSV "</span>{cabeceraCsvEsperada}" no encontrada. Se usará valor vacío. Datos de fila: ${JSON.stringify(filaCsv).substring(0,100)}`, true);
                 valor = "";
             }
-            
-            // Validaciones (igual que antes, pero ahora 'valor' debería encontrarse si la columna existe con cualquier variación de espacio/mayúscula)
-            if (claveFirestore === "fecha") {
-                if (!valor || !/^\d{4}-\d{2}-\d{2}$/.test(String(valor).trim())) {
-                    logCargaMasiva(`Error Fila ${i + 1}: FECHA "${valor}" (buscando "${nombreColumnaEsperadaNormalizada}") no tiene formato YYYY-MM-DD. Se omitirá esta fila.`, true);
+
+            valor = String(valor !== undefined ? valor : "").trim();
+
+            // Validaciones
+            if (claveFirestore === "fecha" || claveFirestore === "fechaRecepcionMontaje") {
+                if (claveFirestore === "fecha" && (!valor || !/^\d{4}-\d{2}-\d{2}$/.test(valor))) { // Fecha principal es obligatoria
+                    logCargaMasiva(`Error Fila ${i + 1}: <span class="math-inline">\{cabeceraCsvEsperada\} "</span>{valor}" no tiene formato YYYY-MM-DD o está vacía. Se omitirá esta fila.`, true);
                     filaValida = false; break;
                 }
+                if (claveFirestore === "fechaRecepcionMontaje" && valor && !/^\d{4}-\d{2}-\d{2}$/.test(valor)) { // Opcional, pero si existe, validar
+                    logCargaMasiva(`Error Fila ${i + 1}: <span class="math-inline">\{cabeceraCsvEsperada\} "</span>{valor}" no tiene formato YYYY-MM-DD. Se usará valor vacío para este campo.`, true);
+                    valor = ""; // Opcional, así que no invalidamos la fila, solo el campo
+                }
             }
-            if (claveFirestore === "req" && (!valor || String(valor).trim() === "")) {
-                 logCargaMasiva(`Error Fila ${i + 1}: REQ (buscando "${nombreColumnaEsperadaNormalizada}") es obligatorio. Se omitirá esta fila.`, true);
+            if (claveFirestore === "req" && valor === "") {
+                 logCargaMasiva(`Error Fila ${i + 1}: REQ es obligatorio. Se omitirá esta fila.`, true);
                  filaValida = false; break;
             }
-            if (claveFirestore === "cliente" && (!valor || String(valor).trim() === "")) {
-                 logCargaMasiva(`Error Fila ${i + 1}: CLIENTE (buscando "${nombreColumnaEsperadaNormalizada}") es obligatorio. Se omitirá esta fila.`, true);
+            if (claveFirestore === "cliente" && valor === "") {
+                 logCargaMasiva(`Error Fila ${i + 1}: CLIENTE es obligatorio. Se omitirá esta fila.`, true);
                  filaValida = false; break;
             }
-            nuevoRequerimiento[claveFirestore] = String(valor !== undefined ? valor : "").trim();
+            nuevoRequerimiento[claveFirestore] = valor;
         }
 
         if (filaValida) {
+            // Asegurarse que los campos de fecha opcionales que quedaron vacíos se guarden como null o no se incluyan
+            if (nuevoRequerimiento.fechaRecepcionMontaje === "") {
+                nuevoRequerimiento.fechaRecepcionMontaje = null; 
+            }
             nuevoRequerimiento.timestamp = serverTimestamp();
             registrosParaFirestore.push(nuevoRequerimiento);
         } else {
             erroresDeFormato++;
         }
     }
-    // ... el resto de procesarYSubirDatos sigue igual (subida por lotes, etc.)
-    // ... (código de logs y subida por lotes) ...
-
+    // ... resto de la función procesarYSubirDatosSimple (subida por lotes) sin cambios ...
     if (erroresDeFormato > 0) {
         logCargaMasiva(`${erroresDeFormato} filas contenían errores de formato y fueron omitidas.`);
     }
@@ -450,7 +443,7 @@ const mapeoColumnasEsperadas = {
         return;
     }
 
-    logCargaMasiva(`Procesando ${registrosParaFirestore.length} registros válidos para subir a Firebase...`);
+    logCargaMasiva(`Intentando subir ${registrosParaFirestore.length} registros válidos a Firebase...`);
     const tamanoLote = 490;
     let lotesEnviados = 0;
     let registrosSubidos = 0;
@@ -466,13 +459,13 @@ const mapeoColumnasEsperadas = {
             await batch.commit();
             lotesEnviados++;
             registrosSubidos += loteActual.length;
-            logCargaMasiva(`Lote ${lotesEnviados} enviado con éxito (${loteActual.length} registros). Total subidos: ${registrosSubidos}`);
+            logCargaMasiva(`Lote <span class="math-inline">\{lotesEnviados\} enviado con éxito \(</span>{loteActual.length} registros). Total subidos: ${registrosSubidos}`);
         } catch (error) {
             logCargaMasiva(`Error al enviar lote ${lotesEnviados + 1}: ${error.message}`, true);
             console.error("Error en batch commit:", error);
         }
     }
-    logCargaMasiva(`Proceso de carga masiva completado. Total de registros válidos intentados en lotes: ${registrosSubidos}.`);
+    logCargaMasiva(`Proceso de carga masiva (simple) completado. Total de registros válidos intentados en lotes: ${registrosSubidos}.`);
     if (erroresDeFormato === 0 && registrosSubidos === registrosParaFirestore.length && registrosSubidos > 0) {
          logCargaMasiva("¡Todos los registros válidos fueron subidos exitosamente!", false);
     } else if (registrosSubidos > 0) {
