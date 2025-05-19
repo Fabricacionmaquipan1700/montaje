@@ -21,11 +21,15 @@ const requerimientosCollectionRef = collection(db, "requerimientos");
 
 // LISTA DE TÉCNICOS PREDEFINIDA (¡Actualiza esta lista con tus técnicos reales!)
 const LISTA_TECNICOS_PREDEFINIDOS = [
-    "Alejandro Arias", "Alejandro Mena", "Alejandro Robles", "Ana Reyes",
-    "Bastian Garrido", "Beato Paula", "Carlos Soto", "Claudio Lopez",
-    "Diego Valderas", "Enrico Ramirez", "Enzo Rodriguez", "Felipe Santos",
-    "Fredy Gallardo", "Gerardo Calderon", "Juan Perez", "Laura Pausini",
-    "Luis Soto", "Octavio Henriquez", "Pedro Lara", "Sergio Valencia",
+    "Alejandro Arias", "Alejandro Mena", "Alejandro Robles", "Bastian Garrido", "Beato Paula", 
+    "Claudio López", "Diego Valderas", "Enrico Ramírez", "Enzo Rodríguez", "Felipe Santos", 
+    "Fredy Gallardo", "Gabriel Cifuentes", "Gerardo Calderón", "Héctor Loaiza", "Henry Zamora", 
+    "Hugo Morales", "Jonathan Huichalaf", "José Bravo", "José Cea", "José Luis González", 
+    "José Riquelme", "Juan Carlos Godoy", "Juan González", "Juan Manuel Chandía", "Juan Rojas", 
+    "Julián Herrera", "Karlo Zambrano", "Manuel Urrutia", "Manuel Venegas", "Marcelo Riveros", 
+    "Marco Ayala", "Marco López", "Octavio Henríquez", "Óscar Jiménez", "Pablo Olivares", 
+    "Rogelio Lagos", "Sergio Ibañez", "Sergio Valencia", "Sergio Viloria", "Víctor Chávez", 
+    "Víctor Valdebenito", "Externo",
     "TECNICO SIN ASIGNAR"
 ].sort();
 console.log("app.js: Lista de técnicos predefinidos cargada.");
