@@ -172,6 +172,7 @@ async function cargarRequerimientos() {
                         <td>${data.asunto ? (data.asunto.length > 30 ? data.asunto.substring(0,27)+'...' : data.asunto) : ''}</td>
                         <td>${data.localidad || ''}</td>
                         <td>${data.estatusRequerimiento || ''}</td>
+                        <td>${formatearFechaDesdeYYYYMMDD(data.fechaTerminoServicio)}</td> 
                         <td>${data.solicitante || ''}</td>
                         <td>
                             <button class="action-button edit" onclick="window.editarRequerimiento('${docSnap.id}')">Editar</button>
