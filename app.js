@@ -363,7 +363,7 @@ async function procesarYSubirDatos(registros, cabecerasDetectadasOriginalmente) 
     // Definición de las cabeceras ESPERADAS y su mapeo a claves de Firestore
     // Las CLAVES de este objeto son las que BUSCAREMOS (normalizadas: mayúsculas, sin espacios extra)
 const mapeoColumnasEsperadas = {
-    "FECHA": "fecha", "REQ": "req", "NV": "nv", "CANALDEENTRADA": "canalEntrada",
+    "FECHA_RECEPCION_MONTAJE": "fechaRecepcionMontaje", "FECHA": "fecha", "REQ": "req", "NV": "nv", "CANALDEENTRADA": "canalEntrada",
     "ASUNTO": "asunto", "LOCALIDAD": "localidad", "CLIENTE": "cliente",
     "DIRECCION": "direccion",       // <--- CAMBIO AQUÍ (normalizada y sin tilde)
     "TECNICO": "tecnico", "HORARIO": "horario", "ESTATUS": "estatus", "TIPODEEQUIPO": "tipoEquipo",
