@@ -2,8 +2,12 @@
 console.log("app.js: >>> Script execution started.");
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.10.0/firebase-app.js";
 import {
-    getFirestore, collection, addDoc, getDocs, doc, updateDoc, deleteDoc, orderBy, query, serverTimestamp, getDoc, where, collectionGroup, writeBatch
+    getFirestore, collection, addDoc, getDocs, doc, updateDoc, deleteDoc, 
+    orderBy, query, serverTimestamp, getDoc, where, collectionGroup, writeBatch,
+    limit // <--- ¡AÑADE ESTO AQUÍ!
 } from "https://www.gstatic.com/firebasejs/9.10.0/firebase-firestore.js";
+// Y la importación para initializeApp es separada:
+// import { initializeApp } from "https://www.gstatic.com/firebasejs/9.10.0/firebase-app.js";
 
 // Tu configuración de Firebase
 const firebaseConfig = {
