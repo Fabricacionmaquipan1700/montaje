@@ -155,7 +155,6 @@ async function cargarRequerimientos() {
                 html += `
                     <tr data-id="${docSnap.id}">
                         <td>${formatearFechaDesdeYYYYMMDD(data.fecha)}</td>
-                        {/* ESTA ES LA NUEVA CELDA (<td>) QUE AÑADIMOS PARA LA NUEVA FECHA */}
                         <td>${formatearFechaDesdeYYYYMMDD(data.fechaRecepcionMontaje)}</td>
                         
                         <td>${data.req || ''}</td>
