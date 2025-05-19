@@ -461,13 +461,15 @@ async function cargarDatosParaGraficosEstadisticas() {
 // --- LÓGICA DEL CALENDARIO ---
 // (Esta es la versión que intenta usar resourceTimeGridDay, etc.)
 // (Asegúrate de que los plugins de FullCalendar estén correctamente enlazados en index.html)
+// --- LÓGICA DEL CALENDARIO (VERSIÓN CON VISTAS ESTÁNDAR - SIN RECURSOS) ---
 async function inicializarOActualizarCalendario() {
-    console.log("CALENDARIO: Iniciando inicializarOActualizarCalendario...");
+    console.log("CALENDARIO: Iniciando inicializarOActualizarCalendario (Vistas Estándar)...");
     const calendarEl = document.getElementById('calendarioFullCalendar');
     if (!calendarEl) {
         console.error("CALENDARIO: Elemento #calendarioFullCalendar NO encontrado en el DOM.");
         return;
     }
+
     calendarEl.innerHTML = '<p>Cargando calendario y programaciones...</p>';
 
     if (!FullCalendar) {
@@ -476,10 +478,6 @@ async function inicializarOActualizarCalendario() {
         return;
     }
     console.log("CALENDARIO: FullCalendar está definido.");
-
-    const nombresTecnicosUnicos = new Set();
-    // Usar la lista predefinida como base para las columnas del calendario
-    LISTA_TECNICOS_PREDEFINIDOS.forEach(t => nombresTecnicosUnicos.add(t.trim()));
 
     const programacionesParaEventos = [];
     try {
@@ -516,11 +514,6 @@ async function inicializarOActualizarCalendario() {
                  console.warn(`CALENDARIO: No se pudo obtener la referencia al requerimiento padre para programación ${progDoc.id}`);
             }
             
-            // Añadir técnicos de esta programación a la lista de recursos si no están ya desde la base
-            if (progData.tecnicosAsignados && Array.isArray(progData.tecnicosAsignados)) {
-                progData.tecnicosAsignados.forEach(t => nombresTecnicosUnicos.add(t.trim()));
-            }
-
             let startDateTime, endDateTime;
             if (progData.fechaProgramada && progData.horaInicio) {
                 startDateTime = `${progData.fechaProgramada}T${progData.horaInicio}`;
@@ -531,107 +524,103 @@ async function inicializarOActualizarCalendario() {
 
             if (progData.fechaProgramada && progData.horaFin) {
                 endDateTime = `${progData.fechaProgramada}T${progData.horaFin}`;
-            } else {
+            } else { 
                 console.warn(`CALENDARIO: Programación ${progDoc.id} sin horaFin. Asumiendo 1 hora de duración.`);
                 try {
                     const startDateObj = new Date(startDateTime);
                     if(isNaN(startDateObj.getTime())) throw new Error("Fecha de inicio inválida para calcular fin");
                     startDateObj.setHours(startDateObj.getHours() + 1);
-                    endDateTime = startDateObj.toISOString().split('.')[0];
+                    endDateTime = startDateObj.toISOString().split('.')[0]; 
                 } catch (e) {
                      console.error(`CALENDARIO: Error calculando horaFin para ${progDoc.id}`, e);
-                     endDateTime = startDateTime;
+                     endDateTime = startDateTime; 
                 }
             }
             
-            const resourceIdsParaEvento = progData.tecnicosAsignados && progData.tecnicosAsignados.length > 0 ? 
-                                          progData.tecnicosAsignados.map(t => t.trim()) : ["TECNICO SIN ASIGNAR"];
+            const tecnicosTexto = progData.tecnicosAsignados && progData.tecnicosAsignados.length > 0 ?
+                                  progData.tecnicosAsignados.join(', ') : 'S/A';
 
             programacionesParaEventos.push({
-                id: progDoc.id,
+                id: progDoc.id, 
                 requerimientoId: requerimientoRef ? requerimientoRef.id : null,
-                title: `REQ:${reqDataParaTitulo.req} (${reqDataParaTitulo.cliente || ''}) - ${progData.tipoTarea || 'Tarea'}`,
+                title: `REQ:${reqDataParaTitulo.req} (${reqDataParaTitulo.cliente || ''}) - ${progData.tipoTarea || 'Tarea'} [Téc: ${tecnicosTexto}]`,
                 start: startDateTime,
                 end: endDateTime,
-                resourceIds: resourceIdsParaEvento,
                 extendedProps: {
                     tecnicosOriginales: progData.tecnicosAsignados || [], 
                     estado: progData.estadoProgramacion || '',
-                    notas: progData.notasProgramacion || ''
+                    notas: progData.notasProgramacion || '',
+                    reqNombre: reqDataParaTitulo.req,
+                    clienteNombre: reqDataParaTitulo.cliente,
+                    tipoTareaOriginal: progData.tipoTarea
                 },
             });
         }
         
-        todosLosRecursosTecnicos = Array.from(nombresTecnicosUnicos).map(nombre => ({
-            id: nombre, 
-            title: nombre 
-        }));
-        console.log("CALENDARIO: Recursos (Técnicos) preparados:", todosLosRecursosTecnicos);
         console.log(`CALENDARIO: Se procesaron ${programacionesParaEventos.length} eventos para el calendario.`);
 
     } catch (error) {
         console.error("CALENDARIO: Error obteniendo o procesando programaciones de Firestore:", error);
-        // La llamada a logCargaMasiva fue eliminada de aquí
         if (calendarEl) {
              calendarEl.innerHTML = "<p>Error al cargar datos para el calendario. Revisa la consola (F12).</p>";
         }
         if (error.message && error.message.toLowerCase().includes("index")) {
-            alert("Error de Firestore: El índice necesario para el calendario aún no está listo o falta. Por favor, créalo usando el enlace de la consola y espera a que se habilite.");
+            alert("Error de Firestore: El índice necesario para el calendario aún no está listo o falta. Por favor, créalo usando el enlace que aparece en la consola y espera a que se habilite.");
         }
         return; 
     }
 
     if (calendarioFullCalendar) {
-        console.log("CALENDARIO: Destruyendo calendario existente para re-renderizar.");
+        console.log("CALENDARIO: Destruyendo calendario existente...");
         calendarioFullCalendar.destroy();
-        calendarioFullCalendar = null; // Asegurar que se cree uno nuevo
+        calendarioFullCalendar = null;
     }
     
     try {
-        console.log("CALENDARIO: Creando nueva instancia de FullCalendar con vistas de recursos.");
+        console.log("CALENDARIO: Creando nueva instancia de FullCalendar (Vistas Estándar).");
         calendarioFullCalendar = new FullCalendar.Calendar(calendarEl, {
-            // schedulerLicenseKey: 'CC-Attribution-NonCommercial-NoDerivatives', // Comentada para evitar advertencia
             locale: 'es',
-            initialView: 'resourceTimeGridDay',
+            initialView: 'timeGridWeek', // Usamos vistas estándar
             headerToolbar: {
                 left: 'prev,next today',
                 center: 'title',
-                right: 'resourceTimeGridDay,resourceTimeGridWeek,dayGridMonth,listWeek'
+                right: 'dayGridMonth,timeGridWeek,timeGridDay,listWeek' // Vistas estándar
             },
-            views: {
-                resourceTimeGridDay: { buttonText: 'Día x Téc.', slotMinTime: '06:00:00', slotMaxTime: '22:00:00', slotLabelFormat: { hour: '2-digit', minute: '2-digit', hour12: false } },
-                resourceTimeGridWeek: { buttonText: 'Semana x Téc.', slotLabelFormat: { hour: '2-digit', minute: '2-digit', hour12: false } },
-                dayGridMonth: { buttonText: 'Mes (Gral.)' },
-                listWeek: { buttonText: 'Lista Sem.' }
+            views: { 
+                timeGridDay: { buttonText: 'Día' },
+                timeGridWeek: { buttonText: 'Semana' },
+                dayGridMonth: { buttonText: 'Mes' },
+                listWeek: { buttonText: 'Lista' }
             },
             editable: false, 
-            selectable: true,
-            resources: todosLosRecursosTecnicos,
+            selectable: true, 
             events: programacionesParaEventos,
             contentHeight: 'auto',
             nowIndicator: true,
             slotEventOverlap: false, 
 
             eventClick: function(info) {
-                let tecnicosStr = info.event.extendedProps.tecnicosOriginales ? info.event.extendedProps.tecnicosOriginales.join(', ') : 'No asignados';
+                const evento = info.event;
+                const props = evento.extendedProps;
                 alert(
-                    `Servicio: ${info.event.title}\n` +
-                    `Fecha: ${info.event.start ? info.event.start.toLocaleDateString('es-CL', {day: '2-digit', month: '2-digit', year: 'numeric'}) : 'N/A'}\n` +
-                    `Hora: ${info.event.start ? info.event.start.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit'}) : ''} - ${info.event.end ? info.event.end.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit'}) : ''}\n` +
-                    `Técnicos: ${tecnicosStr}\n` +
-                    `Estado: ${info.event.extendedProps.estado || 'N/A'}\n` +
-                    `Notas: ${info.event.extendedProps.notas || ''}`
+                    `Servicio REQ: ${props.reqNombre || (evento.title.match(/REQ:([^ ]+)/) ? evento.title.match(/REQ:([^ ]+)/)[1] : '?')}\n` +
+                    `Cliente: ${props.clienteNombre || (evento.title.match(/\(([^)]+)\)/) ? evento.title.match(/\(([^)]+)\)/)[1] : '?') }\n` +
+                    `Tarea: ${props.tipoTareaOriginal || (evento.title.split(' - ')[1] ? evento.title.split(' - ')[1].split(' (')[0] : '?')}\n` +
+                    `Fecha: ${evento.start ? evento.start.toLocaleDateString('es-CL') : 'N/A'}\n` +
+                    `Hora: ${evento.start ? evento.start.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit'}) : ''} - ${evento.end ? evento.end.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit'}) : ''}\n` +
+                    `Técnicos: ${props.tecnicosOriginales ? props.tecnicosOriginales.join(', ') : 'No asignados'}\n` +
+                    `Estado: ${props.estado || 'N/A'}\n` +
+                    `Notas: ${props.notas || ''}`
                 );
             },
         });
         calendarioFullCalendar.render();
-        console.log("CALENDARIO: Calendario con recursos renderizado.");
+        console.log("CALENDARIO: Calendario (Vistas Estándar) renderizado.");
     } catch (e) {
         console.error("CALENDARIO: Error CRÍTICO al inicializar FullCalendar:", e);
         if (calendarEl) calendarEl.innerHTML = "<p>Error fatal al inicializar el calendario. Revisa la consola.</p>";
     }
 }
-
 
 // --- LÓGICA DE CARGA MASIVA (COMENTADA - NECESITA REFACTORIZACIÓN COMPLETA) ---
 const csvFileInput = document.getElementById('csvFile'); // Esto podría ser null si la sección está comentada
