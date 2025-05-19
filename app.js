@@ -424,10 +424,15 @@ async function inicializarOActualizarCalendario() {
         }
         logCargaMasiva(`Se cargaron ${programacionesEventos.length} programaciones para el calendario.`);
 
-    } catch (error) {
-        console.error("Error obteniendo programaciones para el calendario:", error);
-        logCargaMasiva("Error cargando datos para el calendario.", true);
+} catch (error) {
+    console.error("CALENDARIO: Error obteniendo o procesando programaciones de Firestore:", error);
+    logCargaMasiva("CALENDARIO: Error cargando datos para el calendario.", true); // <--- LÍNEA PROBLEMÁTICA
+    calendarEl.innerHTML = "<p>Error al cargar datos para el calendario. Revisa la consola (F12).</p>";
+    if (error.message && error.message.toLowerCase().includes("index")) {
+        alert("Error de Firestore: Parece que falta un índice para la consulta de programaciones. Revisa la consola (F12) para ver un enlace para crear el índice necesario.");
     }
+    return; // No continuar si hay error obteniendo datos
+}
 
 
     // 2. Inicializar o actualizar FullCalendar
