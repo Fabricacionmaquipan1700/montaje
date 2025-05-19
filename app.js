@@ -2,7 +2,7 @@
 console.log("app.js: >>> Script execution started.");
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.10.0/firebase-app.js";
 import {
-    getFirestore, collection, addDoc, getDocs, doc, updateDoc, deleteDoc, orderBy, query, serverTimestamp, getDoc, where, collectionGroup // Añadido where y collectionGroup
+    getFirestore, collection, addDoc, getDocs, doc, updateDoc, deleteDoc, orderBy, query, serverTimestamp, getDoc, where, collectionGroup, writeBatch // writeBatch por si se usa en carga masiva futura
 } from "https://www.gstatic.com/firebasejs/9.10.0/firebase-firestore.js";
 
 // Tu configuración de Firebase
@@ -23,7 +23,7 @@ console.log("app.js: Firebase initialized.");
 // --- ELEMENTOS DEL DOM ---
 const formRequerimiento = document.getElementById('formRequerimiento');
 const tablaRequerimientosBody = document.querySelector('#tablaRequerimientos tbody');
-const vistaEntradaTitulo = document.querySelector('#vista-entrada-requerimiento h2'); // Ajustado al nuevo ID de vista
+const vistaEntradaTitulo = document.querySelector('#vista-entrada-requerimiento h2');
 
 // Modal de Programaciones
 const modalProgramaciones = document.getElementById('modalGestionProgramaciones');
@@ -35,8 +35,9 @@ const currentRequerimientoIdInput = document.getElementById('currentRequerimient
 console.log("app.js: DOM elements selected.");
 
 // --- MANEJO DE VISTAS ---
-const vistas = ['vista-entrada-requerimiento', 'vista-visualizacion', 'vista-planificacion', 'vista-graficos']; // 'vista-carga-masiva' removida temporalmente
+const vistas = ['vista-entrada-requerimiento', 'vista-visualizacion', 'vista-planificacion', 'vista-graficos'];
 let calendarioFullCalendar = null; // Variable para la instancia del calendario
+let todosLosRecursosTecnicos = []; // Para almacenar los técnicos como recursos
 
 function mostrarVista(idVista) {
     console.log(`app.js: ---> mostrarVista called with idVista = ${idVista}`);
@@ -53,10 +54,10 @@ function mostrarVista(idVista) {
         cargarRequerimientos();
     }
     if (idVista === 'vista-graficos') {
-        cargarDatosParaGraficosEstadisticas(); // Renombrada para claridad
+        cargarDatosParaGraficosEstadisticas();
     }
     if (idVista === 'vista-planificacion') {
-        inicializarOActualizarCalendario(); // Nueva función para el calendario
+        inicializarOActualizarCalendario();
     }
     if (idVista === 'vista-entrada-requerimiento' && formRequerimiento && !formRequerimiento.dataset.editingId) {
         if(vistaEntradaTitulo) vistaEntradaTitulo.textContent = 'Registrar Nuevo Servicio';
@@ -76,63 +77,71 @@ function formatearFechaDesdeYYYYMMDD(fechaString) {
 }
 
 // --- CRUD DE REQUERIMIENTOS (SERVICIOS) ---
-formRequerimiento.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const idRequerimiento = formRequerimiento.dataset.editingId;
+if (formRequerimiento) {
+    formRequerimiento.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const idRequerimiento = formRequerimiento.dataset.editingId;
 
-    const requerimientoData = {
-        fechaRecepcion: document.getElementById('fechaRecepcion').value,
-        req: document.getElementById('req').value.trim(),
-        nv: document.getElementById('nv').value.trim(),
-        canalEntrada: document.getElementById('canalEntrada').value,
-        asunto: document.getElementById('asunto').value.trim(),
-        localidad: document.getElementById('localidad').value.trim(),
-        cliente: document.getElementById('cliente').value.trim(),
-        direccion: document.getElementById('direccion').value.trim(),
-        estatusRequerimiento: document.getElementById('estatusRequerimiento').value,
-        tipoEquipo: document.getElementById('tipoEquipo').value.trim(),
-        observacionRequerimiento: document.getElementById('observacionRequerimiento').value.trim(),
-        solicitante: document.getElementById('solicitante').value.trim(),
-    };
+        const requerimientoData = {
+            fechaRecepcion: document.getElementById('fechaRecepcion').value,
+            req: document.getElementById('req').value.trim(),
+            nv: document.getElementById('nv').value.trim(),
+            canalEntrada: document.getElementById('canalEntrada').value,
+            asunto: document.getElementById('asunto').value.trim(),
+            localidad: document.getElementById('localidad').value.trim(),
+            cliente: document.getElementById('cliente').value.trim(),
+            direccion: document.getElementById('direccion').value.trim(),
+            estatusRequerimiento: document.getElementById('estatusRequerimiento').value,
+            tipoEquipo: document.getElementById('tipoEquipo').value.trim(),
+            observacionRequerimiento: document.getElementById('observacionRequerimiento').value.trim(),
+            solicitante: document.getElementById('solicitante').value.trim(),
+        };
 
-    if (!requerimientoData.req || !requerimientoData.cliente || !requerimientoData.fechaRecepcion) {
-        alert("Los campos Fecha de Recepción, N° REQ/OT y Cliente son obligatorios.");
-        return;
-    }
-
-    try {
-        if (idRequerimiento) {
-            const docRef = doc(db, "requerimientos", idRequerimiento);
-            await updateDoc(docRef, requerimientoData);
-            alert('Servicio actualizado con éxito!');
-            delete formRequerimiento.dataset.editingId;
-        } else {
-            requerimientoData.timestamp = serverTimestamp();
-            const docRef = await addDoc(requerimientosCollectionRef, requerimientoData);
-            alert('Servicio guardado con éxito! Ahora puedes añadir programaciones desde "Ver Servicios".');
-            // Opcional: abrir modal de programaciones para este nuevo servicio
-            // gestionarProgramaciones(docRef.id, requerimientoData.req); 
+        if (!requerimientoData.req || !requerimientoData.cliente || !requerimientoData.fechaRecepcion) {
+            alert("Los campos Fecha de Recepción, N° REQ/OT y Cliente son obligatorios.");
+            return;
         }
-        formRequerimiento.reset();
-        if(vistaEntradaTitulo) vistaEntradaTitulo.textContent = 'Registrar Nuevo Servicio';
-        mostrarVista('vista-visualizacion');
-    } catch (error) {
-        console.error("Error al guardar/actualizar servicio:", error);
-        alert('Error al guardar el servicio. Ver consola.');
-    }
-});
+
+        try {
+            if (idRequerimiento) {
+                const docRef = doc(db, "requerimientos", idRequerimiento);
+                await updateDoc(docRef, requerimientoData);
+                alert('Servicio actualizado con éxito!');
+                delete formRequerimiento.dataset.editingId;
+            } else {
+                requerimientoData.timestamp = serverTimestamp();
+                const docRef = await addDoc(requerimientosCollectionRef, requerimientoData);
+                alert('Servicio guardado con éxito! Ahora puedes añadir programaciones desde "Ver Servicios".');
+                // Opcional: abrir modal de programaciones para este nuevo servicio
+                // gestionarProgramaciones(docRef.id, requerimientoData.req); 
+            }
+            formRequerimiento.reset();
+            if(vistaEntradaTitulo) vistaEntradaTitulo.textContent = 'Registrar Nuevo Servicio';
+            mostrarVista('vista-visualizacion');
+        } catch (error) {
+            console.error("Error al guardar/actualizar servicio:", error);
+            alert('Error al guardar el servicio. Ver consola.');
+        }
+    });
+} else {
+    console.warn("Elemento formRequerimiento no encontrado al cargar la página.");
+}
+
 
 async function cargarRequerimientos() {
     console.log("app.js: cargarRequerimientos called.");
-    if (!tablaRequerimientosBody) return;
-    tablaRequerimientosBody.innerHTML = `<tr><td colspan="9">Cargando...</td></tr>`; // Ajustar colspan
+    if (!tablaRequerimientosBody) {
+        console.error("Error: El elemento tablaRequerimientosBody no fue encontrado en el DOM.");
+        return;
+    }
+    tablaRequerimientosBody.innerHTML = `<tr><td colspan="9">Cargando...</td></tr>`;
 
     try {
         const q = query(requerimientosCollectionRef, orderBy("timestamp", "desc"));
         const querySnapshot = await getDocs(q);
         let html = '';
         if (querySnapshot.empty) {
-            html = `<tr><td colspan="9">No hay servicios registrados.</td></tr>`; // Ajustar colspan
+            html = `<tr><td colspan="9">No hay servicios registrados.</td></tr>`;
         } else {
             querySnapshot.forEach(docSnap => {
                 const data = docSnap.data();
@@ -159,35 +168,44 @@ async function cargarRequerimientos() {
         tablaRequerimientosBody.innerHTML = html;
     } catch (error) {
         console.error("Error al cargar requerimientos:", error);
-        tablaRequerimientosBody.innerHTML = `<tr><td colspan="9">Error al cargar datos.</td></tr>`; // Ajustar colspan
+        tablaRequerimientosBody.innerHTML = `<tr><td colspan="9">Error al cargar datos.</td></tr>`;
     }
 }
 window.cargarRequerimientos = cargarRequerimientos;
 
 async function editarRequerimiento(id) {
     const docRef = doc(db, "requerimientos", id);
-    const docSnap = await getDoc(docRef);
-    if (docSnap.exists()) {
-        const data = docSnap.data();
-        formRequerimiento.reset(); // Limpiar formulario
-        document.getElementById('fechaRecepcion').value = data.fechaRecepcion || '';
-        document.getElementById('req').value = data.req || '';
-        document.getElementById('nv').value = data.nv || '';
-        document.getElementById('canalEntrada').value = data.canalEntrada || 'Telefono';
-        document.getElementById('asunto').value = data.asunto || '';
-        document.getElementById('localidad').value = data.localidad || '';
-        document.getElementById('cliente').value = data.cliente || '';
-        document.getElementById('direccion').value = data.direccion || '';
-        document.getElementById('estatusRequerimiento').value = data.estatusRequerimiento || 'Pendiente';
-        document.getElementById('tipoEquipo').value = data.tipoEquipo || '';
-        document.getElementById('observacionRequerimiento').value = data.observacionRequerimiento || '';
-        document.getElementById('solicitante').value = data.solicitante || '';
-        
-        formRequerimiento.dataset.editingId = id;
-        if(vistaEntradaTitulo) vistaEntradaTitulo.textContent = `Editando Servicio REQ: ${data.req || id}`;
-        mostrarVista('vista-entrada-requerimiento');
-    } else {
-        alert("Documento no encontrado para editar.");
+    try {
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+            const data = docSnap.data();
+            if (formRequerimiento) {
+                formRequerimiento.reset();
+                document.getElementById('fechaRecepcion').value = data.fechaRecepcion || '';
+                document.getElementById('req').value = data.req || '';
+                document.getElementById('nv').value = data.nv || '';
+                document.getElementById('canalEntrada').value = data.canalEntrada || 'Telefono';
+                document.getElementById('asunto').value = data.asunto || '';
+                document.getElementById('localidad').value = data.localidad || '';
+                document.getElementById('cliente').value = data.cliente || '';
+                document.getElementById('direccion').value = data.direccion || '';
+                document.getElementById('estatusRequerimiento').value = data.estatusRequerimiento || 'Pendiente';
+                document.getElementById('tipoEquipo').value = data.tipoEquipo || '';
+                document.getElementById('observacionRequerimiento').value = data.observacionRequerimiento || '';
+                document.getElementById('solicitante').value = data.solicitante || '';
+                
+                formRequerimiento.dataset.editingId = id;
+                if(vistaEntradaTitulo) vistaEntradaTitulo.textContent = `Editando Servicio REQ: ${data.req || id}`;
+                mostrarVista('vista-entrada-requerimiento');
+            } else {
+                 alert("Error: Formulario de requerimiento no encontrado.");
+            }
+        } else {
+            alert("Documento no encontrado para editar.");
+        }
+    } catch(error) {
+        console.error("Error al obtener documento para editar:", error);
+        alert("Error al cargar datos para editar.");
     }
 }
 window.editarRequerimiento = editarRequerimiento;
@@ -195,9 +213,8 @@ window.editarRequerimiento = editarRequerimiento;
 async function eliminarRequerimiento(id) {
     if (confirm('¿Estás seguro de eliminar este servicio y todas sus programaciones asociadas? Esta acción no se puede deshacer.')) {
         try {
-            // Opcional: Eliminar subcolección de programaciones (más complejo, requiere recursión o función de cloud)
-            // Por ahora, solo eliminamos el requerimiento principal. Las programaciones quedarían huérfanas.
-            // Para una app de producción, se necesitaría una Cloud Function para eliminar subcolecciones.
+            // Idealmente, eliminar subcolección 'programaciones' con una Cloud Function.
+            // Por ahora, solo eliminamos el requerimiento principal.
             await deleteDoc(doc(db, "requerimientos", id));
             alert('Servicio eliminado con éxito.');
             cargarRequerimientos();
@@ -212,65 +229,77 @@ window.eliminarRequerimiento = eliminarRequerimiento;
 
 // --- GESTIÓN DE PROGRAMACIONES (MODAL) ---
 function abrirModalProgramaciones(requerimientoId, reqNombre) {
+    if (!currentRequerimientoIdInput || !modalTituloRequerimiento || !formAddProgramacion || !modalProgramaciones) {
+        console.error("Error: Elementos del modal no encontrados.");
+        return;
+    }
     currentRequerimientoIdInput.value = requerimientoId;
     modalTituloRequerimiento.textContent = `Gestionar Programaciones para REQ: ${reqNombre}`;
     formAddProgramacion.reset();
     cargarProgramacionesExistentes(requerimientoId);
     modalProgramaciones.style.display = 'block';
 }
-window.gestionarProgramaciones = abrirModalProgramaciones; // Alias para el HTML
+window.gestionarProgramaciones = abrirModalProgramaciones;
 
 function cerrarModalProgramaciones() {
-    modalProgramaciones.style.display = 'none';
+    if(modalProgramaciones) modalProgramaciones.style.display = 'none';
 }
-window.cerrarModalProgramaciones = cerrarModalProgramaciones; // Para el botón X
+window.cerrarModalProgramaciones = cerrarModalProgramaciones;
 
-formAddProgramacion.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const requerimientoId = currentRequerimientoIdInput.value;
-    if (!requerimientoId) {
-        alert("Error: ID de requerimiento no encontrado.");
-        return;
-    }
+if (formAddProgramacion) {
+    formAddProgramacion.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const requerimientoId = currentRequerimientoIdInput.value;
+        if (!requerimientoId) {
+            alert("Error: ID de requerimiento no encontrado.");
+            return;
+        }
 
-    const tecnicosAsignados = document.getElementById('modalTecnicosAsignados').value.split(',')
-        .map(t => t.trim()).filter(t => t !== "");
+        const tecnicosAsignados = document.getElementById('modalTecnicosAsignados').value.split(',')
+            .map(t => t.trim()).filter(t => t !== "");
 
-    if (tecnicosAsignados.length === 0) {
-        alert("Debe ingresar al menos un técnico.");
-        return;
-    }
+        if (tecnicosAsignados.length === 0) {
+            alert("Debe ingresar al menos un técnico.");
+            return;
+        }
 
-    const programacionData = {
-        fechaProgramada: document.getElementById('modalFechaProgramada').value,
-        horaInicio: document.getElementById('modalHoraInicio').value,
-        horaFin: document.getElementById('modalHoraFin').value,
-        tipoTarea: document.getElementById('modalTipoTarea').value.trim(),
-        tecnicosAsignados: tecnicosAsignados,
-        estadoProgramacion: document.getElementById('modalEstadoProgramacion').value,
-        notasProgramacion: document.getElementById('modalNotasProgramacion').value.trim(),
-        timestampCreacion: serverTimestamp()
-    };
+        const programacionData = {
+            fechaProgramada: document.getElementById('modalFechaProgramada').value,
+            horaInicio: document.getElementById('modalHoraInicio').value,
+            horaFin: document.getElementById('modalHoraFin').value,
+            tipoTarea: document.getElementById('modalTipoTarea').value.trim(),
+            tecnicosAsignados: tecnicosAsignados,
+            estadoProgramacion: document.getElementById('modalEstadoProgramacion').value,
+            notasProgramacion: document.getElementById('modalNotasProgramacion').value.trim(),
+            timestampCreacion: serverTimestamp()
+        };
 
-    if (!programacionData.fechaProgramada || !programacionData.horaInicio || !programacionData.horaFin || !programacionData.tipoTarea) {
-        alert("Fecha, Hora Inicio, Hora Fin y Tipo de Tarea son obligatorios para la programación.");
-        return;
-    }
+        if (!programacionData.fechaProgramada || !programacionData.horaInicio || !programacionData.horaFin || !programacionData.tipoTarea) {
+            alert("Fecha, Hora Inicio, Hora Fin y Tipo de Tarea son obligatorios para la programación.");
+            return;
+        }
 
-    try {
-        const programacionesRef = collection(db, "requerimientos", requerimientoId, "programaciones");
-        await addDoc(programacionesRef, programacionData);
-        alert('Programación guardada con éxito!');
-        formAddProgramacion.reset();
-        cargarProgramacionesExistentes(requerimientoId); // Recargar lista
-    } catch (error) {
-        console.error("Error al guardar programación:", error);
-        alert('Error al guardar la programación.');
-    }
-});
+        try {
+            const programacionesRef = collection(db, "requerimientos", requerimientoId, "programaciones");
+            await addDoc(programacionesRef, programacionData);
+            alert('Programación guardada con éxito!');
+            formAddProgramacion.reset();
+            cargarProgramacionesExistentes(requerimientoId);
+        } catch (error) {
+            console.error("Error al guardar programación:", error);
+            alert('Error al guardar la programación.');
+        }
+    });
+} else {
+    console.warn("Elemento formAddProgramacion no encontrado al cargar la página.");
+}
+
 
 async function cargarProgramacionesExistentes(requerimientoId) {
-    if (!listaProgramacionesContainer) return;
+    if (!listaProgramacionesContainer) {
+        console.error("Error: listaProgramacionesContainer no encontrado.");
+        return;
+    }
     listaProgramacionesContainer.innerHTML = '<p>Cargando programaciones...</p>';
     
     const programacionesRef = collection(db, "requerimientos", requerimientoId, "programaciones");
@@ -307,12 +336,14 @@ async function cargarProgramacionesExistentes(requerimientoId) {
 }
 
 async function eliminarProgramacion(requerimientoId, programacionId) {
+    // Necesitamos obtener el reqNombre para el modal, pero no es crítico para la eliminación en sí
+    // Podríamos pasar el reqNombre a esta función si queremos mostrarlo en el confirm
     if (confirm('¿Estás seguro de eliminar esta programación?')) {
         try {
             const programacionDocRef = doc(db, "requerimientos", requerimientoId, "programaciones", programacionId);
             await deleteDoc(programacionDocRef);
             alert("Programación eliminada.");
-            cargarProgramacionesExistentes(requerimientoId); // Recargar lista
+            cargarProgramacionesExistentes(requerimientoId);
         } catch (error) {
             console.error("Error al eliminar programación:", error);
             alert("Error al eliminar programación.");
@@ -323,7 +354,6 @@ window.eliminarProgramacion = eliminarProgramacion;
 
 
 // --- LÓGICA DE GRÁFICOS (ESTADÍSTICAS) ---
-// (Simplificado, puedes expandir esto)
 let graficoEstatusReq = null;
 let graficoCanal = null;
 
@@ -334,9 +364,8 @@ async function cargarDatosParaGraficosEstadisticas() {
         const requerimientos = [];
         querySnapshot.forEach(doc => { requerimientos.push(doc.data()); });
 
-        // Gráfico por Estatus de Requerimiento
         const conteoEstatus = requerimientos.reduce((acc, curr) => {
-            acc[curr.estatusRequerimiento] = (acc[curr.estatusRequerimiento] || 0) + 1;
+            if(curr.estatusRequerimiento) acc[curr.estatusRequerimiento] = (acc[curr.estatusRequerimiento] || 0) + 1;
             return acc;
         }, {});
         const ctxEstatus = document.getElementById('graficoEstatusRequerimiento')?.getContext('2d');
@@ -346,15 +375,14 @@ async function cargarDatosParaGraficosEstadisticas() {
                 type: 'pie',
                 data: {
                     labels: Object.keys(conteoEstatus),
-                    datasets: [{ data: Object.values(conteoEstatus), backgroundColor: ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF'] }]
+                    datasets: [{ data: Object.values(conteoEstatus), backgroundColor: ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#27ae60'] }]
                 },
                 options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top'}}}
             });
         }
 
-        // Gráfico por Canal de Entrada (similar a antes)
         const conteoCanales = requerimientos.reduce((acc, curr) => {
-            acc[curr.canalEntrada] = (acc[curr.canalEntrada] || 0) + 1;
+            if(curr.canalEntrada) acc[curr.canalEntrada] = (acc[curr.canalEntrada] || 0) + 1;
             return acc;
         }, {});
         const ctxCanal = document.getElementById('graficoCanalEntrada')?.getContext('2d');
@@ -369,14 +397,12 @@ async function cargarDatosParaGraficosEstadisticas() {
                 options: { responsive: true, maintainAspectRatio: false, scales: {y: {beginAtZero: true}}, plugins: { legend: { display: false }}}
             });
         }
-        console.log("app.js: Gráficos de estadísticas generados/actualizados.");
     } catch (error) {
         console.error("Error al cargar datos para gráficos de estadísticas:", error);
     }
 }
 
-
-// --- LÓGICA DEL CALENDARIO (FASE SIGUIENTE) ---
+// --- LÓGICA DEL CALENDARIO ---
 async function inicializarOActualizarCalendario() {
     console.log("CALENDARIO: Iniciando inicializarOActualizarCalendario...");
     const calendarEl = document.getElementById('calendarioFullCalendar');
@@ -384,7 +410,6 @@ async function inicializarOActualizarCalendario() {
         console.error("CALENDARIO: Elemento #calendarioFullCalendar NO encontrado en el DOM.");
         return;
     }
-
     calendarEl.innerHTML = '<p>Cargando calendario y programaciones...</p>';
 
     if (!FullCalendar) {
@@ -394,7 +419,15 @@ async function inicializarOActualizarCalendario() {
     }
     console.log("CALENDARIO: FullCalendar está definido.");
 
-    const programacionesEventos = [];
+    const nombresTecnicosUnicos = new Set();
+    const tecnicosBase = [ // Actualiza esta lista con tus técnicos principales
+        "Alejandro Mena", "Alejandro Robles", "Bastian Garrido", "Beato Paula", 
+        "Claudio Lopez", "Diego Valderas", "Enrico Ramirez", "Enzo Rodriguez", 
+        "Felipe Santos", "Fredy Gallardo", "TECNICO SIN ASIGNAR" // Añade uno genérico
+    ];
+    tecnicosBase.forEach(t => nombresTecnicosUnicos.add(t.trim()));
+
+    const programacionesParaEventos = [];
     try {
         console.log("CALENDARIO: Intentando obtener programaciones desde Firestore...");
         const qProgramaciones = query(collectionGroup(db, 'programaciones'), orderBy('timestampCreacion', 'desc'));
@@ -402,8 +435,6 @@ async function inicializarOActualizarCalendario() {
         console.log(`CALENDARIO: Se encontraron ${snapshotProgramaciones.docs.length} documentos de programaciones.`);
 
         if (snapshotProgramaciones.empty) {
-            // Si logCargaMasiva fue eliminada, usamos console.log o un log más simple.
-            // Por ahora, solo console.log para evitar más errores si logCargaMasiva no está.
             console.log("CALENDARIO: No se encontraron programaciones en la base de datos.");
         }
 
@@ -430,49 +461,61 @@ async function inicializarOActualizarCalendario() {
             } else {
                  console.warn(`CALENDARIO: No se pudo obtener la referencia al requerimiento padre para programación ${progDoc.id}`);
             }
+             // Añadir técnicos de esta programación a nuestra lista única para los recursos
+            if (progData.tecnicosAsignados && Array.isArray(progData.tecnicosAsignados)) {
+                progData.tecnicosAsignados.forEach(t => nombresTecnicosUnicos.add(t.trim()));
+            }
 
             let startDateTime, endDateTime;
             if (progData.fechaProgramada && progData.horaInicio) {
                 startDateTime = `${progData.fechaProgramada}T${progData.horaInicio}`;
-            } else {
-                console.warn(`CALENDARIO: Programación ${progDoc.id} sin fechaProgramada o horaInicio. Usando fecha actual como fallback.`);
-                startDateTime = new Date().toISOString().split('T')[0] + 'T00:00:00'; 
+            } else { 
+                console.warn(`CALENDARIO: Programación ${progDoc.id} con datos de fecha/hora incompletos. Omitiendo.`);
+                continue; 
             }
 
             if (progData.fechaProgramada && progData.horaFin) {
                 endDateTime = `${progData.fechaProgramada}T${progData.horaFin}`;
-            } else if (startDateTime) {
+            } else {
                 console.warn(`CALENDARIO: Programación ${progDoc.id} sin horaFin. Asumiendo 1 hora de duración.`);
                 try {
                     const startDateObj = new Date(startDateTime);
                     startDateObj.setHours(startDateObj.getHours() + 1);
                     endDateTime = startDateObj.toISOString().split('.')[0];
                 } catch (e) {
-                     endDateTime = startDateTime;
+                     endDateTime = startDateTime; 
                 }
             }
+            
+            const resourceIdsParaEvento = progData.tecnicosAsignados && progData.tecnicosAsignados.length > 0 ? 
+                                          progData.tecnicosAsignados.map(t => t.trim()) : ["TECNICO SIN ASIGNAR"];
 
-            programacionesEventos.push({
+
+            programacionesParaEventos.push({
                 id: progDoc.id,
                 requerimientoId: requerimientoRef ? requerimientoRef.id : null,
-                title: `REQ: ${reqDataParaTitulo.req} - ${progData.tipoTarea || 'Tarea'} (${reqDataParaTitulo.cliente})`,
+                title: `REQ:${reqDataParaTitulo.req} (${reqDataParaTitulo.cliente || ''}) - ${progData.tipoTarea || 'Tarea'}`,
                 start: startDateTime,
                 end: endDateTime,
+                resourceIds: resourceIdsParaEvento,
                 extendedProps: {
-                    tecnicos: progData.tecnicosAsignados || [],
+                    tecnicosOriginales: progData.tecnicosAsignados || [], 
                     estado: progData.estadoProgramacion || '',
                     notas: progData.notasProgramacion || ''
                 },
             });
         }
-        console.log(`CALENDARIO: Se procesaron ${programacionesEventos.length} eventos para el calendario.`);
+        
+        todosLosRecursosTecnicos = Array.from(nombresTecnicosUnicos).map(nombre => ({
+            id: nombre, 
+            title: nombre 
+        }));
+        console.log("CALENDARIO: Recursos (Técnicos) preparados:", todosLosRecursosTecnicos);
+        console.log(`CALENDARIO: Se procesaron ${programacionesParaEventos.length} eventos para el calendario.`);
 
     } catch (error) {
         console.error("CALENDARIO: Error obteniendo o procesando programaciones de Firestore:", error);
-        // LA LÍNEA QUE LLAMABA A logCargaMasiva HA SIDO ELIMINADA DE AQUÍ
-        if (calendarEl) { // Comprobamos que calendarEl exista
-             calendarEl.innerHTML = "<p>Error al cargar datos para el calendario. Revisa la consola (F12).</p>";
-        }
+        if (calendarEl) calendarEl.innerHTML = "<p>Error al cargar datos para el calendario. Revisa la consola (F12).</p>";
         if (error.message && error.message.toLowerCase().includes("index")) {
             alert("Error de Firestore: El índice necesario para el calendario aún no está listo o falta. Por favor, créalo usando el enlace de la consola y espera a que se habilite.");
         }
@@ -480,71 +523,70 @@ async function inicializarOActualizarCalendario() {
     }
 
     if (calendarioFullCalendar) {
-        console.log("CALENDARIO: Actualizando eventos del calendario existente.");
-        calendarioFullCalendar.removeAllEvents();
-        calendarioFullCalendar.addEventSource(programacionesEventos);
-    } else if (FullCalendar && calendarEl) { // Comprobamos que calendarEl exista
-        console.log("CALENDARIO: Creando nueva instancia de FullCalendar.");
-        try {
-            calendarioFullCalendar = new FullCalendar.Calendar(calendarEl, {
-                locale: 'es',
-                initialView: 'dayGridMonth',
-                headerToolbar: {
-                    left: 'prev,next today',
-                    center: 'title',
-                    right: 'dayGridMonth,timeGridWeek,timeGridDay,listWeek'
-                },
-                events: programacionesEventos,
-                editable: false, 
-                selectable: true,
-                contentHeight: 'auto',
-                eventClick: function(info) {
-                    let tecnicosStr = info.event.extendedProps.tecnicos ? info.event.extendedProps.tecnicos.join(', ') : 'No asignados';
-                    alert(
-                        `Servicio: ${info.event.title}\n` +
-                        `Fecha: ${info.event.start ? info.event.start.toLocaleDateString('es-CL', {day: '2-digit', month: '2-digit', year: 'numeric'}) : 'N/A'}\n` +
-                        `Hora: ${info.event.start ? info.event.start.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit'}) : ''} - ${info.event.end ? info.event.end.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit'}) : ''}\n` +
-                        `Técnicos: ${tecnicosStr}\n` +
-                        `Estado: ${info.event.extendedProps.estado || 'N/A'}\n` +
-                        `Notas: ${info.event.extendedProps.notas || ''}`
-                    );
-                },
-            });
-            calendarioFullCalendar.render();
-            console.log("CALENDARIO: Calendario renderizado.");
-        } catch (e) {
-            console.error("CALENDARIO: Error CRÍTICO al inicializar FullCalendar:", e);
-            calendarEl.innerHTML = "<p>Error fatal al inicializar el calendario. Revisa la consola.</p>";
-        }
-    } else if (!FullCalendar) {
-         console.error("CALENDARIO: FullCalendar no está cargado.");
-         if (calendarEl) calendarEl.innerHTML = "<p>Error al cargar el calendario. Librería FullCalendar no encontrada.</p>";
+        console.log("CALENDARIO: Destruyendo calendario existente para re-renderizar.");
+        calendarioFullCalendar.destroy();
+    }
+    
+    try {
+        console.log("CALENDARIO: Creando nueva instancia de FullCalendar con vistas de recursos.");
+        calendarioFullCalendar = new FullCalendar.Calendar(calendarEl, {
+            schedulerLicenseKey: 'CC-Attribution-NonCommercial-NoDerivatives',
+            locale: 'es',
+            initialView: 'resourceTimeGridDay',
+            headerToolbar: {
+                left: 'prev,next today',
+                center: 'title',
+                right: 'resourceTimeGridDay,resourceTimeGridWeek,dayGridMonth,listWeek'
+            },
+            views: {
+                resourceTimeGridDay: { buttonText: 'Día x Téc.', slotMinTime: '06:00:00', slotMaxTime: '22:00:00', slotLabelFormat: { hour: '2-digit', minute: '2-digit', hour12: false } },
+                resourceTimeGridWeek: { buttonText: 'Semana x Téc.', slotLabelFormat: { hour: '2-digit', minute: '2-digit', hour12: false } },
+                dayGridMonth: { buttonText: 'Mes (Gral.)' },
+                listWeek: { buttonText: 'Lista Sem.' }
+            },
+            editable: false, 
+            selectable: true,
+            resources: todosLosRecursosTecnicos,
+            events: programacionesParaEventos,
+            contentHeight: 'auto',
+            nowIndicator: true,
+            slotEventOverlap: false, // Evitar que eventos se superpongan visualmente en la misma hora/recurso
+
+            eventClick: function(info) {
+                let tecnicosStr = info.event.extendedProps.tecnicosOriginales ? info.event.extendedProps.tecnicosOriginales.join(', ') : 'No asignados';
+                alert(
+                    `Servicio: ${info.event.title}\n` +
+                    `Fecha: ${info.event.start ? info.event.start.toLocaleDateString('es-CL', {day: '2-digit', month: '2-digit', year: 'numeric'}) : 'N/A'}\n` +
+                    `Hora: ${info.event.start ? info.event.start.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit'}) : ''} - ${info.event.end ? info.event.end.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit'}) : ''}\n` +
+                    `Técnicos: ${tecnicosStr}\n` +
+                    `Estado: ${info.event.extendedProps.estado || 'N/A'}\n` +
+                    `Notas: ${info.event.extendedProps.notas || ''}`
+                );
+            },
+        });
+        calendarioFullCalendar.render();
+        console.log("CALENDARIO: Calendario con recursos renderizado.");
+    } catch (e) {
+        console.error("CALENDARIO: Error CRÍTICO al inicializar FullCalendar:", e);
+        if (calendarEl) calendarEl.innerHTML = "<p>Error fatal al inicializar el calendario. Revisa la consola.</p>";
     }
 }
 
 
 // --- LÓGICA DE CARGA MASIVA (COMENTADA - NECESITA REFACTORIZACIÓN COMPLETA) ---
-/*
 const csvFileInput = document.getElementById('csvFile');
 const btnProcesarCsv = document.getElementById('btnProcesarCsv');
-const cargaMasivaLog = document.getElementById('cargaMasivaLog');
-
+// const cargaMasivaLog = document.getElementById('cargaMasivaLog'); // Ya no se usa directamente aquí
 if (btnProcesarCsv) {
     btnProcesarCsv.addEventListener('click', () => {
-        alert("La carga masiva está deshabilitada y necesita ser rediseñada para la nueva estructura de datos con múltiples programaciones por servicio.");
-        // handleFileUpload(); // La función antigua ya no es compatible
+        alert("La carga masiva está actualmente deshabilitada y necesita ser rediseñada para la nueva estructura de datos con múltiples programaciones por servicio.");
     });
 }
-// La función handleFileUpload y procesarYSubirDatosSimple anteriores quedan aquí comentadas
-// ya que no son compatibles con la nueva estructura de requerimientos -> programaciones.
-// Se necesitaría una lógica completamente nueva para el CSV.
-*/
-
 
 // --- INICIALIZACIÓN ---
 document.addEventListener('DOMContentLoaded', () => {
     console.log("app.js: DOMContentLoaded event fired.");
-    mostrarVista('vista-entrada-requerimiento'); // Vista inicial
+    mostrarVista('vista-entrada-requerimiento');
 });
 
 console.log("app.js: <<< Script execution finished.");
