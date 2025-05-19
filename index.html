@@ -205,9 +205,11 @@
                         <label for="modalHoraFin">Hora Fin:</label>
                         <input type="time" id="modalHoraFin" required>
                     </div>
-                </div>
-                <label for="modalTecnicosAsignados">Técnico(s) (separados por coma):</label>
-                <input type="text" id="modalTecnicosAsignados" placeholder="Ej: Juan Perez, Ana Reyes" required>
+                <label for="modalTecnicosCheckboxContainer">Técnico(s) Asignado(s) (Selecciona uno o más):</label>
+<div id="modalTecnicosCheckboxContainer" class="checkbox-container">
+    {/* Los checkboxes se generarán aquí por JavaScript */}
+    <p>Cargando técnicos...</p>
+</div>
                 
                 <label for="modalEstadoProgramacion">Estado de esta Programación:</label>
                 <select id="modalEstadoProgramacion">
