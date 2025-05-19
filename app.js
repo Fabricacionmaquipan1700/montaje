@@ -76,8 +76,10 @@ formRequerimiento.addEventListener('submit', async (e) => {
     e.preventDefault();
     console.log("app.js: Form submitted.");
     const idRequerimiento = formRequerimiento.dataset.editingId;
+
     const requerimiento = {
-        fecha: document.getElementById('fecha').value,
+        fecha: document.getElementById('fecha').value, // Fecha principal
+        fechaRecepcionMontaje: document.getElementById('fechaRecepcionMontaje').value || null, // Nuevo campo, guardar null si está vacío
         req: document.getElementById('req').value,
         nv: document.getElementById('nv').value,
         canalEntrada: document.getElementById('canalEntrada').value,
@@ -91,6 +93,7 @@ formRequerimiento.addEventListener('submit', async (e) => {
         tipoEquipo: document.getElementById('tipoEquipo').value,
         observacion: document.getElementById('observacion').value,
         solicitante: document.getElementById('solicitante').value,
+        // timestamp se maneja abajo
     };
 
     try {
@@ -101,7 +104,7 @@ formRequerimiento.addEventListener('submit', async (e) => {
             delete formRequerimiento.dataset.editingId;
             if(vistaEntradaTitulo) vistaEntradaTitulo.textContent = 'Nuevo Requerimiento';
         } else {
-            requerimiento.timestamp = serverTimestamp();
+            requerimiento.timestamp = serverTimestamp(); // Añadir timestamp solo al crear
             await addDoc(requerimientosCollectionRef, requerimiento);
             alert('Requerimiento guardado con éxito!');
         }
@@ -112,7 +115,6 @@ formRequerimiento.addEventListener('submit', async (e) => {
         alert('Error al guardar. Ver consola (F12 en el navegador).');
     }
 });
-
 async function cargarRequerimientos() {
     console.log("app.js: cargarRequerimientos called.");
     if (!tablaRequerimientosBody) {
