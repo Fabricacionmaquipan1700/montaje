@@ -402,7 +402,7 @@ async function cargarDatosParaGraficosEstadisticas() {
 
 // --- LÓGICA DEL CALENDARIO ---
 async function inicializarOActualizarCalendario() {
-    console.log("CALENDARIO: Iniciando inicializarOActualizarCalendario...");
+    console.log("CALENDARIO: Iniciando inicializarOActualizarCalendario (Vistas Estándar)...");
     const calendarEl = document.getElementById('calendarioFullCalendar');
     if (!calendarEl) {
         console.error("CALENDARIO: Elemento #calendarioFullCalendar NO encontrado en el DOM.");
@@ -411,26 +411,18 @@ async function inicializarOActualizarCalendario() {
 
     calendarEl.innerHTML = '<p>Cargando calendario y programaciones...</p>';
 
-    if (!FullCalendar) { // Verificar si la librería FullCalendar está cargada
+    if (!FullCalendar) {
         console.error("CALENDARIO: FullCalendar no está definido. Revisa la etiqueta <script> en index.html.");
         calendarEl.innerHTML = "<p>Error: Librería FullCalendar no cargada.</p>";
         return;
     }
     console.log("CALENDARIO: FullCalendar está definido.");
 
-    // PASO 1: Obtener y preparar los recursos (técnicos)
-    const nombresTecnicosUnicos = new Set();
-    const tecnicosBase = [ // Actualiza esta lista con tus técnicos principales
-        "Alejandro Mena", "Alejandro Robles", "Bastian Garrido", "Beato Paula", 
-        "Claudio Lopez", "Diego Valderas", "Enrico Ramirez", "Enzo Rodriguez", 
-        "Felipe Santos", "Fredy Gallardo", "TECNICO SIN ASIGNAR" // Añade uno genérico
-    ];
-    tecnicosBase.forEach(t => nombresTecnicosUnicos.add(t.trim()));
-
-    // PASO 2: Obtener las programaciones y extraer más técnicos
     const programacionesParaEventos = [];
     try {
         console.log("CALENDARIO: Intentando obtener programaciones desde Firestore...");
+        // Esta consulta asume que tienes un índice compuesto para 'programaciones' ordenado por 'timestampCreacion' desc.
+        // Si no lo tienes, Firestore te dará un error en la consola con un enlace para crearlo.
         const qProgramaciones = query(collectionGroup(db, 'programaciones'), orderBy('timestampCreacion', 'desc'));
         const snapshotProgramaciones = await getDocs(qProgramaciones);
         console.log(`CALENDARIO: Se encontraron ${snapshotProgramaciones.docs.length} documentos de programaciones.`);
@@ -441,8 +433,8 @@ async function inicializarOActualizarCalendario() {
 
         for (const progDoc of snapshotProgramaciones.docs) {
             const progData = progDoc.data();
-            const requerimientoRef = progDoc.ref.parent.parent; 
-            let reqDataParaTitulo = { req: '?', cliente: '?' }; 
+            const requerimientoRef = progDoc.ref.parent.parent;
+            let reqDataParaTitulo = { req: '?', cliente: '?' };
 
             console.log(`CALENDARIO: Procesando programación ID: ${progDoc.id}, Fecha: ${progData.fechaProgramada}`);
 
@@ -463,16 +455,12 @@ async function inicializarOActualizarCalendario() {
                  console.warn(`CALENDARIO: No se pudo obtener la referencia al requerimiento padre para programación ${progDoc.id}`);
             }
             
-            if (progData.tecnicosAsignados && Array.isArray(progData.tecnicosAsignados)) {
-                progData.tecnicosAsignados.forEach(t => nombresTecnicosUnicos.add(t.trim()));
-            }
-
             let startDateTime, endDateTime;
             if (progData.fechaProgramada && progData.horaInicio) {
                 startDateTime = `${progData.fechaProgramada}T${progData.horaInicio}`;
             } else { 
                 console.warn(`CALENDARIO: Programación ${progDoc.id} con datos de fecha/hora incompletos. Omitiendo.`);
-                continue; 
+                continue; // Omitir este evento si no tiene información esencial de inicio
             }
 
             if (progData.fechaProgramada && progData.horaFin) {
@@ -490,88 +478,100 @@ async function inicializarOActualizarCalendario() {
                 }
             }
             
-            const resourceIdsParaEvento = progData.tecnicosAsignados && progData.tecnicosAsignados.length > 0 ? 
-                                          progData.tecnicosAsignados.map(t => t.trim()) : ["TECNICO SIN ASIGNAR"];
+            const tecnicosTexto = progData.tecnicosAsignados && progData.tecnicosAsignados.length > 0 ?
+                                  progData.tecnicosAsignados.join(', ') : 'S/A'; // S/A = Sin Asignar
 
             programacionesParaEventos.push({
                 id: progDoc.id, 
                 requerimientoId: requerimientoRef ? requerimientoRef.id : null,
-                title: `REQ:${reqDataParaTitulo.req} (${reqDataParaTitulo.cliente || ''}) - ${progData.tipoTarea || 'Tarea'}`,
+                title: `REQ:${reqDataParaTitulo.req} (${reqDataParaTitulo.cliente || ''}) - ${progData.tipoTarea || 'Tarea'} [Téc: ${tecnicosTexto}]`, // Título del evento
                 start: startDateTime,
                 end: endDateTime,
-                resourceIds: resourceIdsParaEvento, 
-                extendedProps: {
+                extendedProps: { // Propiedades personalizadas
                     tecnicosOriginales: progData.tecnicosAsignados || [], 
                     estado: progData.estadoProgramacion || '',
-                    notas: progData.notasProgramacion || ''
+                    notas: progData.notasProgramacion || '',
+                    reqNombre: reqDataParaTitulo.req,
+                    clienteNombre: reqDataParaTitulo.cliente,
+                    tipoTareaOriginal: progData.tipoTarea
                 },
+                // Puedes añadir colores basados en estado o técnico si lo deseas más adelante
+                // backgroundColor: obtenerColorPorEstado(progData.estadoProgramacion), 
+                // textColor: 'white',
             });
         }
         
-        todosLosRecursosTecnicos = Array.from(nombresTecnicosUnicos).map(nombre => ({
-            id: nombre, 
-            title: nombre 
-        }));
-        console.log("CALENDARIO: Recursos (Técnicos) preparados:", todosLosRecursosTecnicos);
         console.log(`CALENDARIO: Se procesaron ${programacionesParaEventos.length} eventos para el calendario.`);
 
     } catch (error) {
         console.error("CALENDARIO: Error obteniendo o procesando programaciones de Firestore:", error);
-        // La siguiente línea que llamaba a logCargaMasiva HA SIDO ELIMINADA/COMENTADA:
-        // logCargaMasiva("CALENDARIO: Error cargando datos para el calendario.", true); 
-        if (calendarEl) { 
+        if (calendarEl) {
              calendarEl.innerHTML = "<p>Error al cargar datos para el calendario. Revisa la consola (F12).</p>";
         }
+        // La alerta por índice faltante
         if (error.message && error.message.toLowerCase().includes("index")) {
-            alert("Error de Firestore: El índice necesario para el calendario aún no está listo o falta. Por favor, créalo usando el enlace de la consola y espera a que se habilite.");
+            alert("Error de Firestore: El índice necesario para el calendario aún no está listo o falta. Por favor, créalo usando el enlace que aparece en la consola y espera a que se habilite.");
         }
         return; 
     }
 
+    // Destruir calendario anterior si existe, para asegurar una reinicialización limpia
     if (calendarioFullCalendar) {
-        console.log("CALENDARIO: Destruyendo calendario existente para re-renderizar.");
+        console.log("CALENDARIO: Destruyendo calendario existente...");
         calendarioFullCalendar.destroy();
+        calendarioFullCalendar = null; // Importante para que se cree uno nuevo
     }
     
     try {
-        console.log("CALENDARIO: Creando nueva instancia de FullCalendar con vistas de recursos.");
+        console.log("CALENDARIO: Creando nueva instancia de FullCalendar (Vistas Estándar).");
         calendarioFullCalendar = new FullCalendar.Calendar(calendarEl, {
-            // schedulerLicenseKey: 'CC-Attribution-NonCommercial-NoDerivatives', // Comentada para evitar advertencia "Unknown option"
-            locale: 'es',
-            initialView: 'resourceTimeGridDay',
+            locale: 'es', // Español
+            initialView: 'timeGridWeek', // Vista semanal con horas por defecto
             headerToolbar: {
                 left: 'prev,next today',
                 center: 'title',
-                right: 'resourceTimeGridDay,resourceTimeGridWeek,dayGridMonth,listWeek'
+                right: 'dayGridMonth,timeGridWeek,timeGridDay,listWeek' // Vistas estándar
             },
-            views: {
-                resourceTimeGridDay: { buttonText: 'Día x Téc.', slotMinTime: '06:00:00', slotMaxTime: '22:00:00', slotLabelFormat: { hour: '2-digit', minute: '2-digit', hour12: false } },
-                resourceTimeGridWeek: { buttonText: 'Semana x Téc.', slotLabelFormat: { hour: '2-digit', minute: '2-digit', hour12: false } },
-                dayGridMonth: { buttonText: 'Mes (Gral.)' },
-                listWeek: { buttonText: 'Lista Sem.' }
+            views: { // Personalizar texto de botones si quieres
+                timeGridDay: { buttonText: 'Día' },
+                timeGridWeek: { buttonText: 'Semana' },
+                dayGridMonth: { buttonText: 'Mes' },
+                listWeek: { buttonText: 'Lista' }
             },
-            editable: false, 
-            selectable: true,
-            resources: todosLosRecursosTecnicos, // Aquí se usan los técnicos
-            events: programacionesParaEventos,   // Aquí se usan las programaciones
-            contentHeight: 'auto',
-            nowIndicator: true,
-            slotEventOverlap: false,
+            editable: false,  // Los eventos no se pueden arrastrar ni redimensionar
+            selectable: true, // Permite seleccionar rangos de tiempo (para futuro "crear evento")
+            events: programacionesParaEventos, // Aquí se pasan los eventos
+            contentHeight: 'auto', // Ajustar altura al contenido
+            nowIndicator: true, // Muestra una línea en la hora actual
+            slotEventOverlap: false, // Evita que los eventos se dibujen uno encima de otro visualmente
 
-            eventClick: function(info) {
-                let tecnicosStr = info.event.extendedProps.tecnicosOriginales ? info.event.extendedProps.tecnicosOriginales.join(', ') : 'No asignados';
+            eventClick: function(info) { // Lo que sucede al hacer clic en un evento
+                const evento = info.event;
+                const props = evento.extendedProps;
                 alert(
-                    `Servicio: ${info.event.title}\n` +
-                    `Fecha: ${info.event.start ? info.event.start.toLocaleDateString('es-CL', {day: '2-digit', month: '2-digit', year: 'numeric'}) : 'N/A'}\n` +
-                    `Hora: ${info.event.start ? info.event.start.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit'}) : ''} - ${info.event.end ? info.event.end.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit'}) : ''}\n` +
-                    `Técnicos: ${tecnicosStr}\n` +
-                    `Estado: ${info.event.extendedProps.estado || 'N/A'}\n` +
-                    `Notas: ${info.event.extendedProps.notas || ''}`
+                    `Servicio REQ: ${props.reqNombre || (evento.title.match(/REQ:([^ ]+)/) ? evento.title.match(/REQ:([^ ]+)/)[1] : '?')}\n` +
+                    `Cliente: ${props.clienteNombre || (evento.title.match(/\(([^)]+)\)/) ? evento.title.match(/\(([^)]+)\)/)[1] : '?') }\n` +
+                    `Tarea: ${props.tipoTareaOriginal || (evento.title.split(' - ')[1] ? evento.title.split(' - ')[1].split(' (')[0] : '?')}\n` +
+                    `Fecha: ${evento.start ? evento.start.toLocaleDateString('es-CL') : 'N/A'}\n` +
+                    `Hora: ${evento.start ? evento.start.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit'}) : ''} - ${evento.end ? evento.end.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit'}) : ''}\n` +
+                    `Técnicos: ${props.tecnicosOriginales ? props.tecnicosOriginales.join(', ') : 'No asignados'}\n` +
+                    `Estado: ${props.estado || 'N/A'}\n` +
+                    `Notas: ${props.notas || ''}`
                 );
+                // Podrías abrir el modal de edición de la programación aquí si lo deseas:
+                // if (evento.extendedProps.requerimientoId && evento.id) {
+                //    abrirModalParaEditarProgramacion(evento.extendedProps.requerimientoId, evento.id);
+                // }
             },
+            // Podrías añadir un callback 'select' para crear nuevas programaciones
+            // select: function(selectInfo) {
+            //    alert('Seleccionado desde ' + selectInfo.startStr + ' hasta ' + selectInfo.endStr);
+            //    // Aquí podrías abrir el modal para añadir una nueva programación,
+            //    // pre-llenando las fechas y horas con selectInfo.start y selectInfo.end
+            // }
         });
         calendarioFullCalendar.render();
-        console.log("CALENDARIO: Calendario con recursos renderizado.");
+        console.log("CALENDARIO: Calendario (Vistas Estándar) renderizado.");
     } catch (e) {
         console.error("CALENDARIO: Error CRÍTICO al inicializar FullCalendar:", e);
         if (calendarEl) calendarEl.innerHTML = "<p>Error fatal al inicializar el calendario. Revisa la consola.</p>";
