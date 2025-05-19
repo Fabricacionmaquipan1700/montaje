@@ -162,12 +162,12 @@ async function cargarRequerimientos() {
                         <td>${data.asunto || ''}</td>
                         <td>${data.localidad || ''}</td>
                         <td>${data.cliente || ''}</td>
-                        <td>${data.direccion || ''}</td> {/* Recuerda que esta cabecera en el HTML es 'DIRECCIÓN' con tilde */}
+                        <td>${data.direccion || ''}</td> 
                         <td>${data.tecnico || ''}</td>
                         <td>${data.horario || ''}</td>
                         <td>${data.estatus || ''}</td>
                         <td>${data.tipoEquipo || ''}</td>
-                        <td>${data.observacion || ''}</td> {/* Recuerda que esta cabecera en el HTML es 'OBSERVACIÓN' con tilde */}
+                        <td>${data.observacion || ''}</td> 
                         <td>${data.solicitante || ''}</td>
                         <td>
                             <button class="action-button edit" onclick="window.editarRequerimiento('${docSnap.id}')">Editar</button>
