@@ -408,23 +408,26 @@ async function inicializarOActualizarCalendario() {
         console.error("CALENDARIO: Elemento #calendarioFullCalendar NO encontrado en el DOM.");
         return;
     }
+
     calendarEl.innerHTML = '<p>Cargando calendario y programaciones...</p>';
 
-    if (!FullCalendar) {
+    if (!FullCalendar) { // Verificar si la librería FullCalendar está cargada
         console.error("CALENDARIO: FullCalendar no está definido. Revisa la etiqueta <script> en index.html.");
         calendarEl.innerHTML = "<p>Error: Librería FullCalendar no cargada.</p>";
         return;
     }
     console.log("CALENDARIO: FullCalendar está definido.");
 
+    // PASO 1: Obtener y preparar los recursos (técnicos)
     const nombresTecnicosUnicos = new Set();
-    const tecnicosBase = [ // Actualiza esta lista con tus técnicos principales o cárgala de Firestore
+    const tecnicosBase = [ // Actualiza esta lista con tus técnicos principales
         "Alejandro Mena", "Alejandro Robles", "Bastian Garrido", "Beato Paula", 
         "Claudio Lopez", "Diego Valderas", "Enrico Ramirez", "Enzo Rodriguez", 
-        "Felipe Santos", "Fredy Gallardo", "TECNICO SIN ASIGNAR"
+        "Felipe Santos", "Fredy Gallardo", "TECNICO SIN ASIGNAR" // Añade uno genérico
     ];
     tecnicosBase.forEach(t => nombresTecnicosUnicos.add(t.trim()));
 
+    // PASO 2: Obtener las programaciones y extraer más técnicos
     const programacionesParaEventos = [];
     try {
         console.log("CALENDARIO: Intentando obtener programaciones desde Firestore...");
@@ -438,8 +441,8 @@ async function inicializarOActualizarCalendario() {
 
         for (const progDoc of snapshotProgramaciones.docs) {
             const progData = progDoc.data();
-            const requerimientoRef = progDoc.ref.parent.parent;
-            let reqDataParaTitulo = { req: '?', cliente: '?' };
+            const requerimientoRef = progDoc.ref.parent.parent; 
+            let reqDataParaTitulo = { req: '?', cliente: '?' }; 
 
             console.log(`CALENDARIO: Procesando programación ID: ${progDoc.id}, Fecha: ${progData.fechaProgramada}`);
 
@@ -474,13 +477,13 @@ async function inicializarOActualizarCalendario() {
 
             if (progData.fechaProgramada && progData.horaFin) {
                 endDateTime = `${progData.fechaProgramada}T${progData.horaFin}`;
-            } else {
+            } else { 
                 console.warn(`CALENDARIO: Programación ${progDoc.id} sin horaFin. Asumiendo 1 hora de duración.`);
                 try {
                     const startDateObj = new Date(startDateTime);
                     if(isNaN(startDateObj.getTime())) throw new Error("Fecha de inicio inválida para calcular fin");
                     startDateObj.setHours(startDateObj.getHours() + 1);
-                    endDateTime = startDateObj.toISOString().split('.')[0];
+                    endDateTime = startDateObj.toISOString().split('.')[0]; 
                 } catch (e) {
                      console.error(`CALENDARIO: Error calculando horaFin para ${progDoc.id}`, e);
                      endDateTime = startDateTime; 
@@ -491,12 +494,12 @@ async function inicializarOActualizarCalendario() {
                                           progData.tecnicosAsignados.map(t => t.trim()) : ["TECNICO SIN ASIGNAR"];
 
             programacionesParaEventos.push({
-                id: progDoc.id,
+                id: progDoc.id, 
                 requerimientoId: requerimientoRef ? requerimientoRef.id : null,
                 title: `REQ:${reqDataParaTitulo.req} (${reqDataParaTitulo.cliente || ''}) - ${progData.tipoTarea || 'Tarea'}`,
                 start: startDateTime,
                 end: endDateTime,
-                resourceIds: resourceIdsParaEvento,
+                resourceIds: resourceIdsParaEvento, 
                 extendedProps: {
                     tecnicosOriginales: progData.tecnicosAsignados || [], 
                     estado: progData.estadoProgramacion || '',
@@ -514,8 +517,9 @@ async function inicializarOActualizarCalendario() {
 
     } catch (error) {
         console.error("CALENDARIO: Error obteniendo o procesando programaciones de Firestore:", error);
-        // LA LLAMADA A logCargaMasiva HA SIDO ELIMINADA DE AQUÍ
-        if (calendarEl) {
+        // La siguiente línea que llamaba a logCargaMasiva HA SIDO ELIMINADA/COMENTADA:
+        // logCargaMasiva("CALENDARIO: Error cargando datos para el calendario.", true); 
+        if (calendarEl) { 
              calendarEl.innerHTML = "<p>Error al cargar datos para el calendario. Revisa la consola (F12).</p>";
         }
         if (error.message && error.message.toLowerCase().includes("index")) {
@@ -532,7 +536,7 @@ async function inicializarOActualizarCalendario() {
     try {
         console.log("CALENDARIO: Creando nueva instancia de FullCalendar con vistas de recursos.");
         calendarioFullCalendar = new FullCalendar.Calendar(calendarEl, {
-            schedulerLicenseKey: 'CC-Attribution-NonCommercial-NoDerivatives',
+            // schedulerLicenseKey: 'CC-Attribution-NonCommercial-NoDerivatives', // Comentada para evitar advertencia "Unknown option"
             locale: 'es',
             initialView: 'resourceTimeGridDay',
             headerToolbar: {
@@ -548,8 +552,8 @@ async function inicializarOActualizarCalendario() {
             },
             editable: false, 
             selectable: true,
-            resources: todosLosRecursosTecnicos,
-            events: programacionesParaEventos,
+            resources: todosLosRecursosTecnicos, // Aquí se usan los técnicos
+            events: programacionesParaEventos,   // Aquí se usan las programaciones
             contentHeight: 'auto',
             nowIndicator: true,
             slotEventOverlap: false,
