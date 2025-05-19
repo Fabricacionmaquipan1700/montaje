@@ -426,10 +426,15 @@ async function inicializarOActualizarCalendario() {
 
 } catch (error) {
     console.error("CALENDARIO: Error obteniendo o procesando programaciones de Firestore:", error);
-    logCargaMasiva("CALENDARIO: Error cargando datos para el calendario.", true); // <--- LÍNEA PROBLEMÁTICA
+    // La siguiente línea es la que causa el error "logCargaMasiva is not defined"
+    logCargaMasiva("CALENDARIO: Error cargando datos para el calendario.", true); // <--- LÍNEA PROBLEMÁTICA (app.js:425 o similar)
+
+    // Esta otra línea también podría estar causando el error si la anterior se comenta pero esta no
+    // logCargaMasiva("CALENDARIO: Error cargando datos para el calendario.", true); // <--- POSIBLE LÍNEA PROBLEMÁTICA (app.js:429 o similar si hay otra llamada)
+
     calendarEl.innerHTML = "<p>Error al cargar datos para el calendario. Revisa la consola (F12).</p>";
     if (error.message && error.message.toLowerCase().includes("index")) {
-        alert("Error de Firestore: Parece que falta un índice para la consulta de programaciones. Revisa la consola (F12) para ver un enlace para crear el índice necesario.");
+        alert("Error de Firestore: El índice necesario para el calendario aún no está listo o falta. Por favor, créalo usando el enlace de la consola y espera a que se habilite.");
     }
     return; // No continuar si hay error obteniendo datos
 }
