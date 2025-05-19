@@ -230,6 +230,37 @@ async function editarRequerimiento(id) {
 }
 window.editarRequerimiento = editarRequerimiento;
 
+function filtrarTablaServicios() {
+    const input = document.getElementById('buscadorServicios');
+    const filtro = input.value.toUpperCase();
+    const tabla = document.getElementById('tablaRequerimientos');
+    const filas = tabla.getElementsByTagName('tr');
+
+    // Empezar desde 1 para saltar la fila de cabeceras (<tr><th>...</th></tr>)
+    for (let i = 1; i < filas.length; i++) {
+        const filaActual = filas[i];
+        const celdas = filaActual.getElementsByTagName('td');
+        let visible = false;
+        for (let j = 0; j < celdas.length; j++) { // Iterar sobre todas las celdas EXCEPTO las de acciones
+            // No buscar en la columna de botones de "Acciones" ni "Programaciones"
+            // Asumiendo que estas son las últimas 2 columnas
+            if (j < celdas.length - 2) { 
+                const celda = celdas[j];
+                if (celda) {
+                    const textoCelda = celda.textContent || celda.innerText;
+                    if (textoCelda.toUpperCase().indexOf(filtro) > -1) {
+                        visible = true;
+                        break; // Si una celda coincide, la fila es visible
+                    }
+                }
+            }
+        }
+        filaActual.style.display = visible ? "" : "none";
+    }
+}
+// Para que la función sea accesible desde el onkeyup en el HTML
+window.filtrarTablaServicios = filtrarTablaServicios;
+
 async function eliminarRequerimiento(id) {
     if (confirm('¿Estás seguro de eliminar este servicio y TODAS sus programaciones asociadas? Esta acción no se puede deshacer.')) {
         try {
