@@ -86,59 +86,6 @@ function mostrarVista(idVista) {
 }
 window.mostrarVista = mostrarVista;
 
-// Cerca del inicio de app.js
-let datosOriginalesRequerimientos = []; // Para guardar los datos sin ordenar
-let ordenActual = {
-    columna: 'timestamp', // Campo por defecto para la ordenación inicial de Firebase
-    direccion: 'desc' // 'asc' o 'desc'
-};
-
-// Nueva función para ordenar
-function ordenarTablaPorColumna(indiceColumna, nombreCampoFirestore) {
-    const nuevaDireccion = (ordenActual.columna === nombreCampoFirestore && ordenActual.direccion === 'asc') ? 'desc' : 'asc';
-    ordenActual.columna = nombreCampoFirestore;
-    ordenActual.direccion = nuevaDireccion;
-
-    // Reordenar datosOriginalesRequerimientos
-    datosOriginalesRequerimientos.sort((a, b) => {
-        let valA = a[nombreCampoFirestore];
-        let valB = b[nombreCampoFirestore];
-
-        // Manejar fechas (asumiendo formato YYYY-MM-DD)
-        if (nombreCampoFirestore.toLowerCase().includes('fecha')) {
-            // Convertir a objetos Date para comparación correcta, o comparar como strings si el formato es consistente
-            // Si son strings YYYY-MM-DD, la comparación directa de strings funciona bien.
-            // Si son null o vacíos, tratarlos como menores o mayores según la dirección.
-            if (valA === null || valA === '') valA = nuevaDireccion === 'asc' ? '9999-99-99' : '0000-00-00';
-            if (valB === null || valB === '') valB = nuevaDireccion === 'asc' ? '9999-99-99' : '0000-00-00';
-        } else if (typeof valA === 'string') {
-            valA = valA.toUpperCase();
-            valB = valB.toUpperCase();
-        } else if (typeof valA === 'number' && typeof valB === 'number') {
-            // Comparación numérica directa
-        } else { // Si son tipos mixtos o no comparables directamente, convertir a string
-            valA = String(valA).toUpperCase();
-            valB = String(valB).toUpperCase();
-        }
-
-
-        if (valA < valB) {
-            return nuevaDireccion === 'asc' ? -1 : 1;
-        }
-        if (valA > valB) {
-            return nuevaDireccion === 'asc' ? 1 : -1;
-        }
-        return 0; // Son iguales
-    });
-
-    // Volver a renderizar la tabla con los datos ordenados
-    renderizarTablaRequerimientos(datosOriginalesRequerimientos);
-
-    // Actualizar indicador visual en cabeceras (opcional avanzado)
-    actualizarIndicadoresDeOrdenVisual(indiceColumna, nuevaDireccion);
-}
-window.ordenarTablaPorColumna = ordenarTablaPorColumna;
-
 function actualizarIndicadoresDeOrdenVisual(columnaActiva, direccion) {
     const cabeceras = document.querySelectorAll('#tablaRequerimientos thead th[onclick]');
     cabeceras.forEach((th, index) => {
