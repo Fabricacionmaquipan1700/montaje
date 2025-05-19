@@ -115,36 +115,61 @@ formRequerimiento.addEventListener('submit', async (e) => {
         alert('Error al guardar. Ver consola (F12 en el navegador).');
     }
 });
+
+// Esta función la definimos antes, o puedes ponerla aquí si no está ya
+function formatearFechaDesdeYYYYMMDD(fechaString) {
+    if (!fechaString || !/^\d{4}-\d{2}-\d{2}$/.test(fechaString)) {
+        return ''; // Devolver vacío si la fecha no es válida o no existe
+    }
+    const dateObj = new Date(fechaString + 'T00:00:00Z'); // Interpretar como UTC
+    if (isNaN(dateObj.getTime())) {
+        return 'Fecha Inv.';
+    }
+    return dateObj.toLocaleDateString('es-CL', { timeZone: 'UTC' }); // Formato Chileno
+}
 async function cargarRequerimientos() {
     console.log("app.js: cargarRequerimientos called.");
+    // 'tablaRequerimientosBody' es la variable que definimos antes que apunta al <tbody> de tu tabla
     if (!tablaRequerimientosBody) {
         console.error("app.js: tablaRequerimientosBody no encontrado. No se puede cargar datos.");
         return;
     }
-    tablaRequerimientosBody.innerHTML = '<tr><td colspan="15">Cargando...</td></tr>';
+    tablaRequerimientosBody.innerHTML = '<tr><td colspan="16">Cargando...</td></tr>'; // Aumentado colspan a 16 porque añadimos una columna
+
     try {
         const q = query(requerimientosCollectionRef, orderBy("timestamp", "desc"));
         const querySnapshot = await getDocs(q);
-        let html = '';
+        let html = ''; // Aquí vamos a ir construyendo el HTML de las filas
+
         if (querySnapshot.empty) {
-            html = '<tr><td colspan="15">No hay requerimientos registrados.</td></tr>';
+            html = '<tr><td colspan="16">No hay requerimientos registrados.</td></tr>'; // Aumentado colspan
         } else {
-            querySnapshot.forEach(docSnap => {
-                const data = docSnap.data();
-                let fechaFormateada = 'N/A';
-                if (data.fecha) {
-                    const dateObj = new Date(data.fecha + 'T00:00:00Z');
-                    if (!isNaN(dateObj)) {
-                         fechaFormateada = dateObj.toLocaleDateString('es-CL', { timeZone: 'UTC' });
-                    }
-                }
+            querySnapshot.forEach(docSnap => { // Por cada requerimiento que viene de Firebase...
+                const data = docSnap.data(); // 'data' es un objeto con todos los campos del requerimiento
+
+                // Construimos una fila <tr> con varias celdas <td>
+                // Cada ${data.nombreDelCampo || ''} toma el valor del campo de Firebase.
+                // Si el campo no existe o está vacío, muestra un string vacío '' en lugar de 'undefined' o 'null'.
+                // Usamos la función formatearFechaDesdeYYYYMMDD para las fechas.
+
                 html += `
                     <tr data-id="${docSnap.id}">
-                        <td>${fechaFormateada}</td>
-                        <td>${data.req || ''}</td><td>${data.nv || ''}</td><td>${data.canalEntrada || ''}</td>
-                        <td>${data.asunto || ''}</td><td>${data.localidad || ''}</td><td>${data.cliente || ''}</td>
-                        <td>${data.direccion || ''}</td><td>${data.tecnico || ''}</td><td>${data.horario || ''}</td>
-                        <td>${data.estatus || ''}</td><td>${data.tipoEquipo || ''}</td><td>${data.observacion || ''}</td>
+                        <td>${formatearFechaDesdeYYYYMMDD(data.fecha)}</td>
+                        {/* ESTA ES LA NUEVA CELDA (<td>) QUE AÑADIMOS PARA LA NUEVA FECHA */}
+                        <td>${formatearFechaDesdeYYYYMMDD(data.fechaRecepcionMontaje)}</td>
+                        
+                        <td>${data.req || ''}</td>
+                        <td>${data.nv || ''}</td>
+                        <td>${data.canalEntrada || ''}</td>
+                        <td>${data.asunto || ''}</td>
+                        <td>${data.localidad || ''}</td>
+                        <td>${data.cliente || ''}</td>
+                        <td>${data.direccion || ''}</td> {/* Recuerda que esta cabecera en el HTML es 'DIRECCIÓN' con tilde */}
+                        <td>${data.tecnico || ''}</td>
+                        <td>${data.horario || ''}</td>
+                        <td>${data.estatus || ''}</td>
+                        <td>${data.tipoEquipo || ''}</td>
+                        <td>${data.observacion || ''}</td> {/* Recuerda que esta cabecera en el HTML es 'OBSERVACIÓN' con tilde */}
                         <td>${data.solicitante || ''}</td>
                         <td>
                             <button class="action-button edit" onclick="window.editarRequerimiento('${docSnap.id}')">Editar</button>
@@ -154,14 +179,15 @@ async function cargarRequerimientos() {
                 `;
             });
         }
-        tablaRequerimientosBody.innerHTML = html;
+        tablaRequerimientosBody.innerHTML = html; // Finalmente, ponemos todas las filas construidas dentro del <tbody> de la tabla
         console.log("app.js: Requerimientos cargados en tabla.");
     } catch (error) {
         console.error("app.js: Error al cargar requerimientos: ", error);
-        tablaRequerimientosBody.innerHTML = '<tr><td colspan="15">Error al cargar datos. Ver consola (F12).</td></tr>';
+        tablaRequerimientosBody.innerHTML = '<tr><td colspan="16">Error al cargar datos. Ver consola (F12).</td></tr>'; // Aumentado colspan
     }
 }
-window.cargarRequerimientos = cargarRequerimientos;
+window.cargarRequerimientos = cargarRequerimientos; // Hacemos global la función si aún no lo está
+
 
 async function editarRequerimiento(id) {
     console.log(`app.js: editarRequerimiento called for ID: ${id}`);
