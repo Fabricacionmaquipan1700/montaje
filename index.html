@@ -6,17 +6,20 @@
     <title>Gestión de Servicios y Programaciones</title>
     <link rel="stylesheet" href="style.css">
 
-
+    {/* --- SCRIPTS DE FULLCALENDAR --- */}
+    {/* Locales (los que SÍ tienes en tu carpeta fullcalendar_libs) */}
     <script src='fullcalendar_libs/fullcalendar-core.global.min.js'></script>
     <script src='fullcalendar_libs/fullcalendar-interaction.global.min.js'></script>
     <script src='fullcalendar_libs/fullcalendar-daygrid.global.min.js'></script>
     <script src='fullcalendar_libs/fullcalendar-timegrid.global.min.js'></script>
     <script src='fullcalendar_libs/fullcalendar-list.global.min.js'></script>
-
+    
+    {/* Plugins de RESOURCE desde CDN (versión 6.1.17 para coincidir) */}
     <script src='https://cdn.jsdelivr.net/npm/@fullcalendar/resource-common@6.1.17/index.global.min.js'></script>
     <script src='https://cdn.jsdelivr.net/npm/@fullcalendar/resource-timegrid@6.1.17/index.global.min.js'></script>
-        <script src='https://cdn.jsdelivr.net/npm/@fullcalendar/resource-daygrid@6.1.17/index.global.min.js'></script> 
-
+    {/* <script src='https://cdn.jsdelivr.net/npm/@fullcalendar/resource-daygrid@6.1.17/index.global.min.js'></script> */}
+    
+    {/* Otros scripts */}
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
 </head>
@@ -98,12 +101,22 @@
                         </select>
                     </div>
                 </div>
+
+                <div class="form-grid">
+                    <div>
+                        <label for="fechaTerminoServicio">FECHA DE TÉRMINO DEL SERVICIO (Opcional):</label>
+                        <input type="date" id="fechaTerminoServicio">
+                    </div>
+                    <div>
+                        {/* Espacio libre o para otro campo futuro */}
+                    </div>
+                </div>
                 
                 <label for="observacionRequerimiento">OBSERVACIONES GENERALES DEL SERVICIO:</label>
                 <textarea id="observacionRequerimiento" rows="3"></textarea>
 
                 <button type="submit">Guardar Servicio</button>
-                <p style="font-size: 0.8em; margin-top: 10px;">Nota: Las programaciones (fechas, técnicos, horarios) se añaden después de guardar el servicio, desde la vista "Ver Servicios".</p>
+                <p style="font-size: 0.8em; margin-top: 10px;">Nota: Las programaciones (fechas, técnicos, horarios) se añaden después de guardar el servicio, desde la vista "Ver Servicios" usando el botón "Programar".</p>
             </form>
         </section>
 
@@ -119,57 +132,54 @@
                             <th>Asunto</th>
                             <th>Localidad</th>
                             <th>Estatus Servicio</th>
+                            <th>F. Término Serv.</th>
                             <th>Solicitante</th>
                             <th>Acciones</th>
                             <th>Programaciones</th>
                         </tr>
                     </thead>
                     <tbody>
-                        </tbody>
+                        {/* Los datos se cargarán aquí por JavaScript */}
+                    </tbody>
                 </table>
             </div>
         </section>
 
         <section id="vista-planificacion" style="display:none;">
             <h2>Calendario de Programaciones</h2>
-            <div id="calendarioFullCalendar"></div>
-            {/* Filtros para el calendario podrían ir aquí */}
+            <div id="calendarioFullCalendar">
+                <p>Cargando calendario...</p>
+            </div>
         </section>
 
         <section id="vista-graficos" style="display:none;">
-            <h2>Estadísticas (Ejemplos)</h2>
+            <h2>Estadísticas</h2>
             <div class="chart-grid">
                 <div class="chart-container">
-                    <h3>Servicios por Estatus</h3>
+                    <h3>Servicios por Estatus General</h3>
                     <canvas id="graficoEstatusRequerimiento"></canvas>
                 </div>
                 <div class="chart-container">
                     <h3>Servicios por Canal de Entrada</h3>
                     <canvas id="graficoCanalEntrada"></canvas>
                 </div>
-                 {/* Podríamos añadir más gráficos, ej: Programaciones por técnico, etc. */}
+                <div class="chart-container">
+                    <h3>Promedio: Recepción a 1ra Programación (Días)</h3>
+                    <canvas id="graficoTiempoPrimeraProgramacion"></canvas>
+                </div>
+                <div class="chart-container">
+                    <h3>Promedio: Recepción a Término Servicio (Días)</h3>
+                    <canvas id="graficoTiempoTotalServicio"></canvas>
+                </div>
             </div>
         </section>
 
+        {/* SECCIÓN DE CARGA MASIVA (TEMPORALMENTE COMENTADA/DESHABILITADA)
         <section id="vista-carga-masiva" style="display:none;">
-            <h2>Carga Masiva de Requerimientos desde CSV (Actualmente Deshabilitada)</h2>
-            <p>Esta funcionalidad necesita ser rediseñada para la nueva estructura de datos con múltiples programaciones.</p>
-            <p>
-                El formato CSV anterior era:
-                <code>FECHA_RECEPCION_MONTAJE,FECHA,REQ,NV,CANAL DE ENTRADA,ASUNTO,LOCALIDAD,CLIENTE,DIRECCION,TECNICO,HORARIO,ESTATUS,TIPO DE EQUIPO,OBSERVACION,SOLICITANTE</code>
-            </p>
-            <hr>
-            <div>
-                <label for="csvFile">Selecciona el archivo CSV:</label>
-                <input type="file" id="csvFile" accept=".csv" style="display: block; margin-bottom: 10px;">
-            </div>
-            <button id="btnProcesarCsv" type="button" style="margin-top: 15px;">Procesar y Subir CSV (No Funcional)</button>
-            <div id="cargaMasivaLog" style="margin-top: 20px; border: 1px solid #ccc; padding: 10px; min-height: 100px; max-height: 300px; background-color: #f9f9f9; overflow-y: auto; font-size: 0.9em; line-height: 1.4;">
-                <p>Esperando archivo...</p>
-            </div>
+            <h2>Carga Masiva (Actualmente Deshabilitada)</h2>
+            <p>Esta funcionalidad necesita ser rediseñada para la nueva estructura de datos.</p>
         </section>
         */}
-
     </main>
 
     <div id="modalGestionProgramaciones" style="display:none;">
@@ -187,7 +197,7 @@
                     </div>
                     <div>
                         <label for="modalTipoTarea">Tipo de Tarea/Servicio:</label>
-                        <input type="text" id="modalTipoTarea" placeholder="Ej: Instalación, Mantención, Traslado" required>
+                        <input type="text" id="modalTipoTarea" placeholder="Ej: Instalación, Mantención" required>
                     </div>
                 </div>
                 <div class="form-grid">
@@ -199,11 +209,12 @@
                         <label for="modalHoraFin">Hora Fin:</label>
                         <input type="time" id="modalHoraFin" required>
                     </div>
+                </div>
+                
                 <label for="modalTecnicosCheckboxContainer">Técnico(s) Asignado(s) (Selecciona uno o más):</label>
-<div id="modalTecnicosCheckboxContainer" class="checkbox-container">
-    {/* Los checkboxes se generarán aquí por JavaScript */}
-    <p>Cargando técnicos...</p>
-</div>
+                <div id="modalTecnicosCheckboxContainer" class="checkbox-container">
+                    <p>Cargando técnicos...</p>
+                </div>
                 
                 <label for="modalEstadoProgramacion">Estado de esta Programación:</label>
                 <select id="modalEstadoProgramacion">
