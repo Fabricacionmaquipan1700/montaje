@@ -122,6 +122,10 @@
 
         <section id="vista-visualizacion" style="display:none;">
             <h2>Listado de Servicios Registrados</h2>
+            <div style="margin-bottom: 1rem;">
+    <label for="buscadorServicios" style="margin-right: 0.5rem; font-weight:normal;">Buscar en servicios:</label>
+    <input type="text" id="buscadorServicios" onkeyup="filtrarTablaServicios()" placeholder="Escribe para buscar...">
+</div>
             <div class="table-container">
                 <table id="tablaRequerimientos">
                     <thead>
