@@ -7,19 +7,12 @@
     <link rel="stylesheet" href="style.css">
 
     {/* --- SCRIPTS DE FULLCALENDAR --- */}
-    {/* Locales (los que SÍ tienes en tu carpeta fullcalendar_libs) */}
-    {/* Asegúrate que estos archivos existen y son la versión correcta/compatible */}
+    {/* Locales (asegúrate que estos archivos existen en la carpeta fullcalendar_libs/) */}
     <script src='fullcalendar_libs/fullcalendar-core.global.min.js'></script>
     <script src='fullcalendar_libs/fullcalendar-interaction.global.min.js'></script>
     <script src='fullcalendar_libs/fullcalendar-daygrid.global.min.js'></script>
     <script src='fullcalendar_libs/fullcalendar-timegrid.global.min.js'></script>
     <script src='fullcalendar_libs/fullcalendar-list.global.min.js'></script>
-
-    {/* Plugins de RESOURCE desde CDN (versión 6.1.17 para coincidir) - ELIMINADOS TEMPORALMENTE */}
-    {/* Si no usas vistas de RECURSOS, estos no son necesarios y podrían causar el error 'Internal' */}
-    {/* <script src='https://cdn.jsdelivr.net/npm/@fullcalendar/resource-common@6.1.17/index.global.min.js'></script> */}
-    {/* <script src='https://cdn.jsdelivr.net/npm/@fullcalendar/resource-timegrid@6.1.17/index.global.min.js'></script> */}
-    {/* <script src='https://cdn.jsdelivr.net/npm/@fullcalendar/resource-daygrid@6.1.17/index.global.min.js'></script> */}
 
     {/* Otros scripts */}
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -132,7 +125,6 @@
                 <table id="tablaRequerimientos">
                     <thead>
                         <tr>
-                            {/* onclick llama a funciones globales expuestas en window */}
                             <th onclick="window.ordenarTablaPorColumna(0, 'fechaRecepcion')">F. Recepción <span class="sort-arrow">⇅</span></th>
                             <th onclick="window.ordenarTablaPorColumna(1, 'req')">REQ/OT <span class="sort-arrow">⇅</span></th>
                             <th onclick="window.ordenarTablaPorColumna(2, 'cliente')">Cliente <span class="sort-arrow">⇅</span></th>
@@ -141,8 +133,8 @@
                             <th onclick="window.ordenarTablaPorColumna(5, 'estatusRequerimiento')">Estatus Servicio <span class="sort-arrow">⇅</span></th>
                             <th onclick="window.ordenarTablaPorColumna(6, 'fechaTerminoServicio')">F. Término Serv. <span class="sort-arrow">⇅</span></th>
                             <th onclick="window.ordenarTablaPorColumna(7, 'solicitante')">Solicitante <span class="sort-arrow">⇅</span></th>
-                            <th>Acciones</th> {/* No se ordena por acciones */}
-                            <th>Programaciones</th> {/* No se ordena por programaciones */}
+                            <th>Acciones</th>
+                            <th>Programaciones</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -181,12 +173,10 @@
             </div>
         </section>
 
-        {/* SECCIÓN DE CARGA MASIVA (TEMPORALMENTE COMENTADA/DESHABILITADA)
+        {/* SECCIÓN DE CARGA MASIVA (COMENTADA/DESHABILITADA)
         <section id="vista-carga-masiva" style="display:none;">
             <h2>Carga Masiva (Actualmente Deshabilitada)</h2>
-            <p>Esta funcionalidad necesita ser rediseñada para la nueva estructura de datos.</p>
-            <input type="file" id="csvFile" accept=".csv">
-            <button id="btnProcesarCsv">Procesar CSV (Deshabilitado)</button>
+            <p>Esta funcionalidad necesita ser rediseñada.</p>
         </section>
         */}
     </main>
@@ -196,7 +186,7 @@
             <span class="close-button" onclick="window.cerrarModalProgramaciones()">&times;</span>
             <h3 id="modalTituloRequerimiento">Gestionar Programaciones para REQ: </h3>
 
-            <h4>Añadir Nueva Programación</h4>
+            <h4>Añadir/Editar Programación</h4>
             <form id="formAddProgramacion">
                 <input type="hidden" id="currentRequerimientoId">
                 <div class="form-grid">
@@ -207,7 +197,7 @@
                     <div>
                         <label for="modalTipoTarea">Tipo de Tarea/Servicio:</label>
                         <select id="modalTipoTarea" required>
-                            <option value="">Seleccione un tipo...</option> {/* Opción por defecto */}
+                            <option value="">Seleccione un tipo...</option>
                             <option value="ADICIONAL DE MONTAJE">ADICIONAL DE MONTAJE</option>
                             <option value="MONTAJE">MONTAJE</option>
                             <option value="PREMONTAJE">PREMONTAJE</option>
@@ -226,7 +216,7 @@
                     </div>
                 </div>
 
-                <label for="modalTecnicosCheckboxContainer">Técnico(s) Asignado(s) (Selecciona uno o más):</label>
+                <label for="modalTecnicosCheckboxContainer">Técnico(s) Asignado(s):</label>
                 <div id="modalTecnicosCheckboxContainer" class="checkbox-container">
                     <p>Cargando técnicos...</p>
                 </div>
@@ -243,7 +233,7 @@
                     <option value="Reprogramar">Reprogramar</option>
                 </select>
 
-                <label for="modalNotasProgramacion">Notas Adicionales para esta Programación:</label>
+                <label for="modalNotasProgramacion">Notas Adicionales:</label>
                 <textarea id="modalNotasProgramacion" rows="2"></textarea>
 
                 <button type="submit">Guardar Programación</button>
