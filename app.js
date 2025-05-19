@@ -171,6 +171,7 @@ async function editarRequerimiento(id) {
         if (docSnap.exists()) {
             const data = docSnap.data();
             document.getElementById('fecha').value = data.fecha || '';
+            document.getElementById('fechaRecepcionMontaje').value = data.fechaRecepcionMontaje || ''; // NUEVA LÍNEA
             document.getElementById('req').value = data.req || '';
             document.getElementById('nv').value = data.nv || '';
             document.getElementById('canalEntrada').value = data.canalEntrada || '';
