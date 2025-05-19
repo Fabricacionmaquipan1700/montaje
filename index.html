@@ -5,9 +5,25 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Gestión de Servicios y Programaciones</title>
     <link rel="stylesheet" href="style.css">
+
+    {/* SCRIPTS DE FULLCALENDAR */}
+    {/* Locales (los que SÍ tienes) */}
+    <script src='fullcalendar_libs/fullcalendar-core.global.min.js'></script>
+    <script src='fullcalendar_libs/fullcalendar-interaction.global.min.js'></script>
+    <script src='fullcalendar_libs/fullcalendar-daygrid.global.min.js'></script>
+    <script src='fullcalendar_libs/fullcalendar-timegrid.global.min.js'></script>
+    <script src='fullcalendar_libs/fullcalendar-list.global.min.js'></script>
+
+    {/* Desde CDN (los que NO encuentras localmente - Asegúrate que la versión sea la misma, ej: 6.1.17) */}
+    {/* Si tus archivos locales son v6.1.17, usa esa versión aquí también */}
+    <script src='https://cdn.jsdelivr.net/npm/@fullcalendar/resource-common@6.1.17/index.global.min.js'></script>
+    <script src='https://cdn.jsdelivr.net/npm/@fullcalendar/resource-timegrid@6.1.17/index.global.min.js'></script>
+    {/* <script src='https://cdn.jsdelivr.net/npm/@fullcalendar/resource-daygrid@6.1.17/index.global.min.js'></script> */}
+
+
+    {/* Otros scripts */}
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
-    <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js'></script>
 </head>
 <body>
     <header>
