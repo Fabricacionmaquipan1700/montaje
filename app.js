@@ -359,13 +359,14 @@ async function handleFileUpload() {
 async function procesarYSubirDatos(registros, cabecerasDetectadasOriginalmente) {
     // Definición de las cabeceras ESPERADAS y su mapeo a claves de Firestore
     // Las CLAVES de este objeto son las que BUSCAREMOS (normalizadas: mayúsculas, sin espacios extra)
-    const mapeoColumnasEsperadas = {
-        "FECHA": "fecha", "REQ": "req", "NV": "nv", "CANALDEENTRADA": "canalEntrada", // "CANAL DE ENTRADA" normalizado
-        "ASUNTO": "asunto", "LOCALIDAD": "localidad", "CLIENTE": "cliente", "DIRECCIÓN": "direccion", // DIRECCIÓN sin tilde por si acaso
-        "TECNICO": "tecnico", "HORARIO": "horario", "ESTATUS": "estatus", "TIPODEEQUIPO": "tipoEquipo", // "TIPO DE EQUIPO" normalizado
-        "OBSERVACIÓN": "observacion", // OBSERVACIÓN con tilde, ya que así está en tu lista original
-        "SOLICITANTE": "solicitante"
-    };
+const mapeoColumnasEsperadas = {
+    "FECHA": "fecha", "REQ": "req", "NV": "nv", "CANALDEENTRADA": "canalEntrada",
+    "ASUNTO": "asunto", "LOCALIDAD": "localidad", "CLIENTE": "cliente",
+    "DIRECCION": "direccion",       // <--- CAMBIO AQUÍ (normalizada y sin tilde)
+    "TECNICO": "tecnico", "HORARIO": "horario", "ESTATUS": "estatus", "TIPODEEQUIPO": "tipoEquipo",
+    "OBSERVACION": "observacion",   // <--- CAMBIO AQUÍ (normalizada y sin tilde)
+    "SOLICITANTE": "solicitante"
+};
     // Log de cabeceras detectadas originalmente por PapaParse (si las hay)
     if (cabecerasDetectadasOriginalmente && cabecerasDetectadasOriginalmente.length > 0) {
         logCargaMasiva(`Cabeceras detectadas originalmente por PapaParse: ${cabecerasDetectadasOriginalmente.join(' | ')}`);
