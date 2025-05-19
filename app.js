@@ -2,7 +2,7 @@
 console.log("app.js: >>> Script execution started.");
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.10.0/firebase-app.js";
 import {
-    getFirestore, collection, addDoc, getDocs, doc, updateDoc, deleteDoc, orderBy, query, serverTimestamp, getDoc, where, collectionGroup, writeBatch // writeBatch por si se usa en carga masiva futura
+    getFirestore, collection, addDoc, getDocs, doc, updateDoc, deleteDoc, orderBy, query, serverTimestamp, getDoc, where, collectionGroup, writeBatch
 } from "https://www.gstatic.com/firebasejs/9.10.0/firebase-firestore.js";
 
 // Tu configuración de Firebase
@@ -36,8 +36,8 @@ console.log("app.js: DOM elements selected.");
 
 // --- MANEJO DE VISTAS ---
 const vistas = ['vista-entrada-requerimiento', 'vista-visualizacion', 'vista-planificacion', 'vista-graficos'];
-let calendarioFullCalendar = null; // Variable para la instancia del calendario
-let todosLosRecursosTecnicos = []; // Para almacenar los técnicos como recursos
+let calendarioFullCalendar = null;
+let todosLosRecursosTecnicos = [];
 
 function mostrarVista(idVista) {
     console.log(`app.js: ---> mostrarVista called with idVista = ${idVista}`);
@@ -112,8 +112,6 @@ if (formRequerimiento) {
                 requerimientoData.timestamp = serverTimestamp();
                 const docRef = await addDoc(requerimientosCollectionRef, requerimientoData);
                 alert('Servicio guardado con éxito! Ahora puedes añadir programaciones desde "Ver Servicios".');
-                // Opcional: abrir modal de programaciones para este nuevo servicio
-                // gestionarProgramaciones(docRef.id, requerimientoData.req); 
             }
             formRequerimiento.reset();
             if(vistaEntradaTitulo) vistaEntradaTitulo.textContent = 'Registrar Nuevo Servicio';
@@ -126,7 +124,6 @@ if (formRequerimiento) {
 } else {
     console.warn("Elemento formRequerimiento no encontrado al cargar la página.");
 }
-
 
 async function cargarRequerimientos() {
     console.log("app.js: cargarRequerimientos called.");
@@ -211,12 +208,13 @@ async function editarRequerimiento(id) {
 window.editarRequerimiento = editarRequerimiento;
 
 async function eliminarRequerimiento(id) {
-    if (confirm('¿Estás seguro de eliminar este servicio y todas sus programaciones asociadas? Esta acción no se puede deshacer.')) {
+    if (confirm('¿Estás seguro de eliminar este servicio y TODAS sus programaciones asociadas? Esta acción no se puede deshacer.')) {
         try {
-            // Idealmente, eliminar subcolección 'programaciones' con una Cloud Function.
+            // TODO: Implementar eliminación de subcolección 'programaciones' (idealmente con Cloud Function)
             // Por ahora, solo eliminamos el requerimiento principal.
+            console.warn(`Eliminando requerimiento ${id}. Sus programaciones quedarán huérfanas si no se eliminan por separado.`);
             await deleteDoc(doc(db, "requerimientos", id));
-            alert('Servicio eliminado con éxito.');
+            alert('Servicio eliminado con éxito. (Las programaciones individuales no se eliminan automáticamente con esta acción).');
             cargarRequerimientos();
         } catch (error) {
             console.error("Error al eliminar servicio:", error);
@@ -226,11 +224,11 @@ async function eliminarRequerimiento(id) {
 }
 window.eliminarRequerimiento = eliminarRequerimiento;
 
-
 // --- GESTIÓN DE PROGRAMACIONES (MODAL) ---
 function abrirModalProgramaciones(requerimientoId, reqNombre) {
-    if (!currentRequerimientoIdInput || !modalTituloRequerimiento || !formAddProgramacion || !modalProgramaciones) {
-        console.error("Error: Elementos del modal no encontrados.");
+    if (!currentRequerimientoIdInput || !modalTituloRequerimiento || !formAddProgramacion || !modalProgramaciones || !listaProgramacionesContainer) {
+        console.error("Error: Elementos del modal de programaciones no encontrados en el DOM.");
+        alert("Error al abrir el gestor de programaciones. Faltan elementos en la página.");
         return;
     }
     currentRequerimientoIdInput.value = requerimientoId;
@@ -278,13 +276,17 @@ if (formAddProgramacion) {
             alert("Fecha, Hora Inicio, Hora Fin y Tipo de Tarea son obligatorios para la programación.");
             return;
         }
+         if (programacionData.horaFin <= programacionData.horaInicio) {
+            alert("La Hora Fin debe ser posterior a la Hora Inicio.");
+            return;
+        }
 
         try {
             const programacionesRef = collection(db, "requerimientos", requerimientoId, "programaciones");
             await addDoc(programacionesRef, programacionData);
             alert('Programación guardada con éxito!');
             formAddProgramacion.reset();
-            cargarProgramacionesExistentes(requerimientoId);
+            cargarProgramacionesExistentes(requerimientoId); // Recargar lista
         } catch (error) {
             console.error("Error al guardar programación:", error);
             alert('Error al guardar la programación.');
@@ -293,7 +295,6 @@ if (formAddProgramacion) {
 } else {
     console.warn("Elemento formAddProgramacion no encontrado al cargar la página.");
 }
-
 
 async function cargarProgramacionesExistentes(requerimientoId) {
     if (!listaProgramacionesContainer) {
@@ -336,8 +337,6 @@ async function cargarProgramacionesExistentes(requerimientoId) {
 }
 
 async function eliminarProgramacion(requerimientoId, programacionId) {
-    // Necesitamos obtener el reqNombre para el modal, pero no es crítico para la eliminación en sí
-    // Podríamos pasar el reqNombre a esta función si queremos mostrarlo en el confirm
     if (confirm('¿Estás seguro de eliminar esta programación?')) {
         try {
             const programacionDocRef = doc(db, "requerimientos", requerimientoId, "programaciones", programacionId);
@@ -351,7 +350,6 @@ async function eliminarProgramacion(requerimientoId, programacionId) {
     }
 }
 window.eliminarProgramacion = eliminarProgramacion;
-
 
 // --- LÓGICA DE GRÁFICOS (ESTADÍSTICAS) ---
 let graficoEstatusReq = null;
@@ -375,7 +373,7 @@ async function cargarDatosParaGraficosEstadisticas() {
                 type: 'pie',
                 data: {
                     labels: Object.keys(conteoEstatus),
-                    datasets: [{ data: Object.values(conteoEstatus), backgroundColor: ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#27ae60'] }]
+                    datasets: [{ data: Object.values(conteoEstatus), backgroundColor: ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#27ae60', '#f39c12'] }]
                 },
                 options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top'}}}
             });
@@ -420,10 +418,10 @@ async function inicializarOActualizarCalendario() {
     console.log("CALENDARIO: FullCalendar está definido.");
 
     const nombresTecnicosUnicos = new Set();
-    const tecnicosBase = [ // Actualiza esta lista con tus técnicos principales
+    const tecnicosBase = [ // Actualiza esta lista con tus técnicos principales o cárgala de Firestore
         "Alejandro Mena", "Alejandro Robles", "Bastian Garrido", "Beato Paula", 
         "Claudio Lopez", "Diego Valderas", "Enrico Ramirez", "Enzo Rodriguez", 
-        "Felipe Santos", "Fredy Gallardo", "TECNICO SIN ASIGNAR" // Añade uno genérico
+        "Felipe Santos", "Fredy Gallardo", "TECNICO SIN ASIGNAR"
     ];
     tecnicosBase.forEach(t => nombresTecnicosUnicos.add(t.trim()));
 
@@ -461,7 +459,7 @@ async function inicializarOActualizarCalendario() {
             } else {
                  console.warn(`CALENDARIO: No se pudo obtener la referencia al requerimiento padre para programación ${progDoc.id}`);
             }
-             // Añadir técnicos de esta programación a nuestra lista única para los recursos
+            
             if (progData.tecnicosAsignados && Array.isArray(progData.tecnicosAsignados)) {
                 progData.tecnicosAsignados.forEach(t => nombresTecnicosUnicos.add(t.trim()));
             }
@@ -480,16 +478,17 @@ async function inicializarOActualizarCalendario() {
                 console.warn(`CALENDARIO: Programación ${progDoc.id} sin horaFin. Asumiendo 1 hora de duración.`);
                 try {
                     const startDateObj = new Date(startDateTime);
+                    if(isNaN(startDateObj.getTime())) throw new Error("Fecha de inicio inválida para calcular fin");
                     startDateObj.setHours(startDateObj.getHours() + 1);
                     endDateTime = startDateObj.toISOString().split('.')[0];
                 } catch (e) {
+                     console.error(`CALENDARIO: Error calculando horaFin para ${progDoc.id}`, e);
                      endDateTime = startDateTime; 
                 }
             }
             
             const resourceIdsParaEvento = progData.tecnicosAsignados && progData.tecnicosAsignados.length > 0 ? 
                                           progData.tecnicosAsignados.map(t => t.trim()) : ["TECNICO SIN ASIGNAR"];
-
 
             programacionesParaEventos.push({
                 id: progDoc.id,
@@ -515,7 +514,10 @@ async function inicializarOActualizarCalendario() {
 
     } catch (error) {
         console.error("CALENDARIO: Error obteniendo o procesando programaciones de Firestore:", error);
-        if (calendarEl) calendarEl.innerHTML = "<p>Error al cargar datos para el calendario. Revisa la consola (F12).</p>";
+        // LA LLAMADA A logCargaMasiva HA SIDO ELIMINADA DE AQUÍ
+        if (calendarEl) {
+             calendarEl.innerHTML = "<p>Error al cargar datos para el calendario. Revisa la consola (F12).</p>";
+        }
         if (error.message && error.message.toLowerCase().includes("index")) {
             alert("Error de Firestore: El índice necesario para el calendario aún no está listo o falta. Por favor, créalo usando el enlace de la consola y espera a que se habilite.");
         }
@@ -550,7 +552,7 @@ async function inicializarOActualizarCalendario() {
             events: programacionesParaEventos,
             contentHeight: 'auto',
             nowIndicator: true,
-            slotEventOverlap: false, // Evitar que eventos se superpongan visualmente en la misma hora/recurso
+            slotEventOverlap: false,
 
             eventClick: function(info) {
                 let tecnicosStr = info.event.extendedProps.tecnicosOriginales ? info.event.extendedProps.tecnicosOriginales.join(', ') : 'No asignados';
@@ -572,22 +574,36 @@ async function inicializarOActualizarCalendario() {
     }
 }
 
-
 // --- LÓGICA DE CARGA MASIVA (COMENTADA - NECESITA REFACTORIZACIÓN COMPLETA) ---
 const csvFileInput = document.getElementById('csvFile');
 const btnProcesarCsv = document.getElementById('btnProcesarCsv');
-// const cargaMasivaLog = document.getElementById('cargaMasivaLog'); // Ya no se usa directamente aquí
 if (btnProcesarCsv) {
     btnProcesarCsv.addEventListener('click', () => {
         alert("La carga masiva está actualmente deshabilitada y necesita ser rediseñada para la nueva estructura de datos con múltiples programaciones por servicio.");
     });
 }
+/*
+// Funciones anteriores de carga masiva simple (handleFileUpload, procesarYSubirDatosSimple)
+// irían aquí si se descomentaran, pero necesitan ser completamente reescritas.
+*/
 
 // --- INICIALIZACIÓN ---
 document.addEventListener('DOMContentLoaded', () => {
     console.log("app.js: DOMContentLoaded event fired.");
+    // Comprobar si los elementos del modal existen antes de añadir listeners o manipularlos
+    if (formAddProgramacion) {
+        // El listener ya está arriba, esto es solo para asegurar que no se añada otro si se refactoriza
+    } else {
+        console.warn("El formulario para añadir programaciones (formAddProgramacion) no se encontró en el DOM.");
+    }
+    const closeModalButton = document.querySelector('#modalGestionProgramaciones .close-button');
+    if (closeModalButton) {
+        // El onclick ya está en el HTML, pero si no, se añadiría aquí.
+    } else {
+        console.warn("Botón para cerrar modal de programaciones no encontrado.");
+    }
+    
     mostrarVista('vista-entrada-requerimiento');
 });
 
 console.log("app.js: <<< Script execution finished.");
-
