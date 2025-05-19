@@ -2,12 +2,10 @@
 console.log("app.js: >>> Script execution started.");
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.10.0/firebase-app.js";
 import {
-    getFirestore, collection, addDoc, getDocs, doc, updateDoc, deleteDoc, 
-    orderBy, query, serverTimestamp, getDoc, where, collectionGroup, writeBatch,
-    limit // <--- ¡AÑADE ESTO AQUÍ!
+    getFirestore, collection, addDoc, getDocs, doc, updateDoc, deleteDoc,
+    orderBy, query, serverTimestamp, getDoc, where, collectionGroup, writeBatch
+    // limit // <--- COMENTADO SI NO SE USA DIRECTAMENTE O CAUSA CONFLICTOS.
 } from "https://www.gstatic.com/firebasejs/9.10.0/firebase-firestore.js";
-// Y la importación para initializeApp es separada:
-// import { initializeApp } from "https://www.gstatic.com/firebasejs/9.10.0/firebase-app.js";
 
 // Tu configuración de Firebase
 const firebaseConfig = {
@@ -25,14 +23,14 @@ const requerimientosCollectionRef = collection(db, "requerimientos");
 
 // LISTA DE TÉCNICOS PREDEFINIDA (¡Actualiza esta lista con tus técnicos reales!)
 const LISTA_TECNICOS_PREDEFINIDOS = [
-    "Alejandro Arias", "Alejandro Mena", "Alejandro Robles", "Bastian Garrido", "Beato Paula", 
-    "Claudio López", "Diego Valderas", "Enrico Ramírez", "Enzo Rodríguez", "Felipe Santos", 
-    "Fredy Gallardo", "Gabriel Cifuentes", "Gerardo Calderón", "Héctor Loaiza", "Henry Zamora", 
-    "Hugo Morales", "Jonathan Huichalaf", "José Bravo", "José Cea", "José Luis González", 
-    "José Riquelme", "Juan Carlos Godoy", "Juan González", "Juan Manuel Chandía", "Juan Rojas", 
-    "Julián Herrera", "Karlo Zambrano", "Manuel Urrutia", "Manuel Venegas", "Marcelo Riveros", 
-    "Marco Ayala", "Marco López", "Octavio Henríquez", "Óscar Jiménez", "Pablo Olivares", 
-    "Rogelio Lagos", "Sergio Ibañez", "Sergio Valencia", "Sergio Viloria", "Víctor Chávez", 
+    "Alejandro Arias", "Alejandro Mena", "Alejandro Robles", "Bastian Garrido", "Beato Paula",
+    "Claudio López", "Diego Valderas", "Enrico Ramírez", "Enzo Rodríguez", "Felipe Santos",
+    "Fredy Gallardo", "Gabriel Cifuentes", "Gerardo Calderón", "Héctor Loaiza", "Henry Zamora",
+    "Hugo Morales", "Jonathan Huichalaf", "José Bravo", "José Cea", "José Luis González",
+    "José Riquelme", "Juan Carlos Godoy", "Juan González", "Juan Manuel Chandía", "Juan Rojas",
+    "Julián Herrera", "Karlo Zambrano", "Manuel Urrutia", "Manuel Venegas", "Marcelo Riveros",
+    "Marco Ayala", "Marco López", "Octavio Henríquez", "Óscar Jiménez", "Pablo Olivares",
+    "Rogelio Lagos", "Sergio Ibañez", "Sergio Valencia", "Sergio Viloria", "Víctor Chávez",
     "Víctor Valdebenito", "Externo",
     "TECNICO SIN ASIGNAR"
 ].sort();
@@ -57,7 +55,16 @@ console.log("app.js: DOM elements selected.");
 // --- MANEJO DE VISTAS ---
 const vistas = ['vista-entrada-requerimiento', 'vista-visualizacion', 'vista-planificacion', 'vista-graficos'];
 let calendarioFullCalendar = null;
-let todosLosRecursosTecnicos = [];
+let todosLosRecursosTecnicos = []; // Aunque no se usa activamente con las vistas estándar del calendario, se mantiene por si se reintroduce la lógica de recursos.
+
+// Variable para almacenar el estado actual del ordenamiento de la tabla
+let ordenActual = {
+    columna: 'timestamp', // Columna por defecto para ordenar al cargar (p.ej., la que usa Firebase)
+    direccion: 'desc', // Dirección por defecto
+    columnaIndiceDOM: -1 // Para saber qué cabecera resaltar
+};
+let datosOriginalesRequerimientos = []; // Para guardar los datos originales y reordenar sin llamar a Firebase
+
 
 function mostrarVista(idVista) {
     console.log(`app.js: ---> mostrarVista called with idVista = ${idVista}`);
@@ -71,7 +78,7 @@ function mostrarVista(idVista) {
     });
 
     if (idVista === 'vista-visualizacion') {
-        cargarRequerimientos();
+        cargarRequerimientos(); // Esto ahora usará renderizarTablaRequerimientos con los datos ya ordenados o los cargará y ordenará.
     }
     if (idVista === 'vista-graficos') {
         cargarDatosParaGraficosEstadisticas();
@@ -86,67 +93,126 @@ function mostrarVista(idVista) {
 }
 window.mostrarVista = mostrarVista;
 
-function actualizarIndicadoresDeOrdenVisual(columnaActiva, direccion) {
-    const cabeceras = document.querySelectorAll('#tablaRequerimientos thead th[onclick]');
-    cabeceras.forEach((th, index) => {
-        let textoOriginal = th.textContent.replace(/ ↓| ↑| ⇅/g, ''); // Quitar flechas anteriores
-        if (index === columnaActiva) {
-            textoOriginal += (direccion === 'asc' ? ' ↑' : ' ↓');
-        } else {
-             textoOriginal += ' \u21C5'; // Flecha arriba-abajo ⇅
-        }
-        th.innerHTML = textoOriginal; // Usar innerHTML si tienes entidades como &#8645;
-    });
-}
-
 
 // Modificar cargarRequerimientos para guardar los datos y luego renderizar
 async function cargarRequerimientos() {
     console.log("app.js: cargarRequerimientos called.");
-    if (!tablaRequerimientosBody) { /* ... manejo de error ... */ return; }
-    const NUMERO_COLUMNAS_TABLA_REQUERIMIENTOS = 10;
+    if (!tablaRequerimientosBody) {
+        console.error("Error: El elemento tablaRequerimientosBody no fue encontrado en el DOM.");
+        tablaRequerimientosBody.innerHTML = `<tr><td colspan="10">Error crítico: Tabla no encontrada.</td></tr>`;
+        return;
+    }
+    const NUMERO_COLUMNAS_TABLA_REQUERIMIENTOS = 10; // Asegúrate que este número sea correcto para el colspan
     tablaRequerimientosBody.innerHTML = `<tr><td colspan="${NUMERO_COLUMNAS_TABLA_REQUERIMIENTOS}">Cargando...</td></tr>`;
 
     try {
-        // La consulta inicial a Firebase puede seguir siendo ordenada por timestamp
-        // o por la columna/dirección actualmente seleccionada si quieres que la carga inicial ya venga ordenada.
-        // Por simplicidad, la dejaremos por timestamp y el ordenamiento se hará en el cliente.
-        const q = query(requerimientosCollectionRef, orderBy("timestamp", "desc"));
-        const querySnapshot = await getDocs(q);
-        
-        datosOriginalesRequerimientos = []; // Limpiar datos anteriores
-        if (!querySnapshot.empty) {
-            querySnapshot.forEach(docSnap => {
-                datosOriginalesRequerimientos.push({ id: docSnap.id, ...docSnap.data() });
-            });
-        }
-        
-        // Aplicar el orden actual (si no es el de timestamp por defecto)
-        if (ordenActual.columna !== 'timestamp' || ordenActual.direccion !== 'desc') {
-            // Forzar una reordenación inicial si el orden actual no es el de firebase
-            const thActivo = Array.from(document.querySelectorAll('#tablaRequerimientos thead th[onclick]'))
-                                .findIndex(th => th.getAttribute('onclick').includes(`'${ordenActual.columna}'`));
-            if (thActivo !== -1) {
-                // Simular un clic para reordenar, pero invirtiendo la dirección para que el primer clic real la ponga bien
-                const dirInversa = ordenActual.direccion === 'asc' ? 'desc' : 'asc';
-                const ordenAnteriorTemporal = { ...ordenActual, direccion: dirInversa }; 
-                ordenarTablaPorColumna(thActivo, ordenActual.columna); // Esto aplicará ordenActual.direccion
-                ordenActual = ordenAnteriorTemporal; // Restaurar para que el próximo clic funcione como se espera
-                 ordenarTablaPorColumna(thActivo, ordenActual.columna); // Aplicar el orden deseado
-            } else {
-                 renderizarTablaRequerimientos(datosOriginalesRequerimientos); // Renderizar con orden de Firebase
+        // Siempre consultamos a Firebase ordenado por timestamp la primera vez o si no hay datos locales
+        // if (datosOriginalesRequerimientos.length === 0) { // Cargar solo si no hay datos o se fuerza recarga
+            const q = query(requerimientosCollectionRef, orderBy("timestamp", "desc"));
+            const querySnapshot = await getDocs(q);
+            
+            datosOriginalesRequerimientos = []; // Limpiar datos anteriores para asegurar que son los más recientes
+            if (!querySnapshot.empty) {
+                querySnapshot.forEach(docSnap => {
+                    datosOriginalesRequerimientos.push({ id: docSnap.id, ...docSnap.data() });
+                });
             }
-        } else {
-            renderizarTablaRequerimientos(datosOriginalesRequerimientos);
-             actualizarIndicadoresDeOrdenVisual(-1, ''); // Limpiar flechas o poner la por defecto
-        }
+        // }
+        
+        // Aplicar el ordenamiento actual (que podría ser el de por defecto 'timestamp', 'desc')
+        ordenarYRenderizarDatos(ordenActual.columna, ordenActual.direccion, ordenActual.columnaIndiceDOM, true);
+
 
     } catch (error) {
         console.error("Error al cargar requerimientos:", error);
         tablaRequerimientosBody.innerHTML = `<tr><td colspan="${NUMERO_COLUMNAS_TABLA_REQUERIMIENTOS}">Error al cargar datos.</td></tr>`;
     }
 }
-window.cargarRequerimientos = cargarRequerimientos; // Asegúrate que siga siendo global
+// window.cargarRequerimientos = cargarRequerimientos; // Asegúrate que siga siendo global si se llama desde HTML directamente en algún punto no visible aquí.
+
+
+function actualizarIndicadoresDeOrdenVisual(columnaIndiceActivo, direccionActual) {
+    const cabeceras = document.querySelectorAll('#tablaRequerimientos thead th[onclick]');
+    cabeceras.forEach((th, index) => {
+        let textoBase = th.textContent.replace(/ ↓| ↑| ⇅/g, '').trim(); // Quitar flechas anteriores
+        if (th.getAttribute('data-original-text')) { // Usar el texto original guardado si existe
+            textoBase = th.getAttribute('data-original-text');
+        } else {
+            th.setAttribute('data-original-text', textoBase); // Guardar el texto original la primera vez
+        }
+
+        if (index === columnaIndiceActivo) {
+            th.innerHTML = `${textoBase} ${direccionActual === 'asc' ? '↑' : '↓'}`;
+        } else {
+            th.innerHTML = `${textoBase} <span class="sort-arrow">⇅</span>`; // Usar span para mejor control si es necesario
+        }
+    });
+}
+
+
+function ordenarTablaPorColumna(columnaIndiceDOM, nombreColumna) {
+    let nuevaDireccion;
+    if (ordenActual.columna === nombreColumna) {
+        nuevaDireccion = ordenActual.direccion === 'asc' ? 'desc' : 'asc';
+    } else {
+        nuevaDireccion = 'asc'; // Por defecto ascendente al cambiar de columna
+    }
+    ordenarYRenderizarDatos(nombreColumna, nuevaDireccion, columnaIndiceDOM);
+}
+window.ordenarTablaPorColumna = ordenarTablaPorColumna; // Hacerla global para los onclick
+
+function ordenarYRenderizarDatos(nombreColumna, direccion, columnaIndiceDOM, esCargaInicial = false) {
+    if (!esCargaInicial) { // Solo actualizar el estado si no es la carga inicial que ya tiene un estado
+        ordenActual.columna = nombreColumna;
+        ordenActual.direccion = direccion;
+        ordenActual.columnaIndiceDOM = columnaIndiceDOM;
+    }
+
+    const factor = direccion === 'asc' ? 1 : -1;
+    const datosCopia = [...datosOriginalesRequerimientos]; // Siempre ordenar sobre una copia de los originales
+
+    datosCopia.sort((a, b) => {
+        let valA = a[nombreColumna];
+        let valB = b[nombreColumna];
+
+        // Manejo específico para fechas y números
+        if (nombreColumna === 'fechaRecepcion' || nombreColumna === 'fechaTerminoServicio') {
+            valA = valA ? new Date(valA).getTime() : 0; // Convertir a timestamp o usar 0/Infinity si está vacío
+            valB = valB ? new Date(valB).getTime() : 0;
+            // Para fechas vacías, podrías querer que siempre vayan al final o al principio
+            if (!a[nombreColumna]) valA = direccion === 'asc' ? Infinity : -Infinity;
+            if (!b[nombreColumna]) valB = direccion === 'asc' ? Infinity : -Infinity;
+        } else if (typeof valA === 'string') {
+            valA = valA.toLowerCase();
+            valB = valB.toLowerCase();
+        } else if (typeof valA === 'number' && typeof valB === 'number') {
+            // No necesita conversión, directo a la comparación
+        } else { // Fallback para tipos mixtos o no manejados (considerar nulos o undefined)
+            valA = String(valA).toLowerCase();
+            valB = String(valB).toLowerCase();
+        }
+
+        if (valA < valB) return -1 * factor;
+        if (valA > valB) return 1 * factor;
+        return 0;
+    });
+
+    renderizarTablaRequerimientos(datosCopia);
+    if (columnaIndiceDOM !== -1) { // Solo actualizar flechas si no es la carga inicial sin orden específico de usuario
+      actualizarIndicadoresDeOrdenVisual(columnaIndiceDOM, direccion);
+    } else if (esCargaInicial && nombreColumna === 'timestamp' && direccion === 'desc') {
+        // Para la carga inicial por timestamp, podríamos querer no mostrar flechas o una por defecto.
+        // O encontrar el índice de 'F. Recepción' si es la representación de 'timestamp' y marcarla.
+        const thRecepcion = Array.from(document.querySelectorAll('#tablaRequerimientos thead th[onclick]'))
+                               .findIndex(th => th.getAttribute('onclick').includes("'fechaRecepcion'"));
+        if (thRecepcion !== -1) {
+            actualizarIndicadoresDeOrdenVisual(thRecepcion, 'desc');
+        } else {
+            actualizarIndicadoresDeOrdenVisual(-1, ''); // Limpiar todas
+        }
+    }
+}
+
 
 // NUEVA función para renderizar la tabla (separada de la obtención de datos)
 function renderizarTablaRequerimientos(datos) {
@@ -181,15 +247,19 @@ function renderizarTablaRequerimientos(datos) {
     tablaRequerimientosBody.innerHTML = html;
     // Limpiar el buscador cuando se recarga/reordena la tabla
     const buscador = document.getElementById('buscadorServicios');
-    if (buscador) buscador.value = ""; 
+    if (buscador) buscador.value = "";
 }
 // --- FUNCIONES AUXILIARES ---
 function formatearFechaDesdeYYYYMMDD(fechaString) {
     if (!fechaString || !/^\d{4}-\d{2}-\d{2}$/.test(fechaString)) {
-        return '';
+        return ''; // Retorna vacío si no hay fecha o el formato es incorrecto
     }
+    // La fecha ya viene como YYYY-MM-DD, que es un formato que Date.parse puede entender
+    // Para asegurar consistencia UTC, podemos añadir T00:00:00Z
     const dateObj = new Date(fechaString + 'T00:00:00Z');
-    if (isNaN(dateObj.getTime())) return 'Fecha Inv.';
+    // Verificar si la fecha es válida después de parsearla
+    if (isNaN(dateObj.getTime())) return 'Fecha Inv.'; // Si la fecha es inválida
+
     return dateObj.toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC' });
 }
 
@@ -212,6 +282,7 @@ if (formRequerimiento) {
             tipoEquipo: document.getElementById('tipoEquipo').value.trim(),
             observacionRequerimiento: document.getElementById('observacionRequerimiento').value.trim(),
             solicitante: document.getElementById('solicitante').value.trim(),
+            fechaTerminoServicio: document.getElementById('fechaTerminoServicio').value || null, // Guardar null si está vacío
         };
 
         if (!requerimientoData.req || !requerimientoData.cliente || !requerimientoData.fechaRecepcion) {
@@ -222,17 +293,19 @@ if (formRequerimiento) {
         try {
             if (idRequerimiento) {
                 const docRef = doc(db, "requerimientos", idRequerimiento);
+                // No actualizar timestamp al editar, o añadir un campo 'timestampModificacion' si es necesario
                 await updateDoc(docRef, requerimientoData);
                 alert('Servicio actualizado con éxito!');
                 delete formRequerimiento.dataset.editingId;
             } else {
-                requerimientoData.timestamp = serverTimestamp();
-                // const docRef = // No necesitamos la referencia aquí si no abrimos el modal automáticamente
+                requerimientoData.timestamp = serverTimestamp(); // Solo para nuevos requerimientos
                 await addDoc(requerimientosCollectionRef, requerimientoData);
                 alert('Servicio guardado con éxito! Ahora puedes añadir programaciones desde "Ver Servicios".');
             }
             formRequerimiento.reset();
             if(vistaEntradaTitulo) vistaEntradaTitulo.textContent = 'Registrar Nuevo Servicio';
+            datosOriginalesRequerimientos = []; // Forzar recarga desde Firebase la próxima vez que se muestre la vista
+            ordenActual = { columna: 'timestamp', direccion: 'desc', columnaIndiceDOM: -1 }; // Resetear orden
             mostrarVista('vista-visualizacion');
         } catch (error) {
             console.error("Error al guardar/actualizar servicio:", error);
@@ -243,52 +316,7 @@ if (formRequerimiento) {
     console.warn("Elemento formRequerimiento no encontrado al cargar la página.");
 }
 
-
-async function cargarRequerimientos() {
-    console.log("app.js: cargarRequerimientos called.");
-    if (!tablaRequerimientosBody) {
-        console.error("Error: El elemento tablaRequerimientosBody no fue encontrado en el DOM.");
-        return;
-    }
-    tablaRequerimientosBody.innerHTML = `<tr><td colspan="9">Cargando...</td></tr>`;
-
-    try {
-        const q = query(requerimientosCollectionRef, orderBy("timestamp", "desc"));
-        const querySnapshot = await getDocs(q);
-        let html = '';
-        if (querySnapshot.empty) {
-            html = `<tr><td colspan="9">No hay servicios registrados.</td></tr>`;
-        } else {
-            querySnapshot.forEach(docSnap => {
-                const data = docSnap.data();
-                html += `
-                    <tr data-id="${docSnap.id}">
-                        <td>${formatearFechaDesdeYYYYMMDD(data.fechaRecepcion)}</td>
-                        <td>${data.req || ''}</td>
-                        <td>${data.cliente || ''}</td>
-                        <td>${data.asunto ? (data.asunto.length > 30 ? data.asunto.substring(0,27)+'...' : data.asunto) : ''}</td>
-                        <td>${data.localidad || ''}</td>
-                        <td>${data.estatusRequerimiento || ''}</td>
-                        <td>${formatearFechaDesdeYYYYMMDD(data.fechaTerminoServicio)}</td> 
-                        <td>${data.solicitante || ''}</td>
-                        <td>
-                            <button class="action-button edit" onclick="window.editarRequerimiento('${docSnap.id}')">Editar</button>
-                            <button class="action-button delete" onclick="window.eliminarRequerimiento('${docSnap.id}')">Eliminar</button>
-                        </td>
-                        <td>
-                            <button class="action-button" onclick="window.gestionarProgramaciones('${docSnap.id}', '${data.req || 'Servicio'}')">Programar</button>
-                        </td>
-                    </tr>
-                `;
-            });
-        }
-        tablaRequerimientosBody.innerHTML = html;
-    } catch (error) {
-        console.error("Error al cargar requerimientos:", error);
-        tablaRequerimientosBody.innerHTML = `<tr><td colspan="9">Error al cargar datos.</td></tr>`;
-    }
-}
-window.cargarRequerimientos = cargarRequerimientos;
+// SE ELIMINÓ LA SEGUNDA DEFINICIÓN REDUNDANTE DE cargarRequerimientos() DE AQUÍ
 
 async function editarRequerimiento(id) {
     const docRef = doc(db, "requerimientos", id);
@@ -297,7 +325,7 @@ async function editarRequerimiento(id) {
         if (docSnap.exists()) {
             const data = docSnap.data();
             if (formRequerimiento) {
-                formRequerimiento.reset();
+                formRequerimiento.reset(); // Limpia el formulario
                 document.getElementById('fechaRecepcion').value = data.fechaRecepcion || '';
                 document.getElementById('req').value = data.req || '';
                 document.getElementById('nv').value = data.nv || '';
@@ -310,10 +338,12 @@ async function editarRequerimiento(id) {
                 document.getElementById('tipoEquipo').value = data.tipoEquipo || '';
                 document.getElementById('observacionRequerimiento').value = data.observacionRequerimiento || '';
                 document.getElementById('solicitante').value = data.solicitante || '';
-                
-                formRequerimiento.dataset.editingId = id;
+                document.getElementById('fechaTerminoServicio').value = data.fechaTerminoServicio || '';
+
+
+                formRequerimiento.dataset.editingId = id; // Marcar que estamos editando
                 if(vistaEntradaTitulo) vistaEntradaTitulo.textContent = `Editando Servicio REQ: ${data.req || id}`;
-                mostrarVista('vista-entrada-requerimiento');
+                mostrarVista('vista-entrada-requerimiento'); // Cambiar a la vista del formulario
             } else {
                  alert("Error: Formulario de requerimiento no encontrado.");
             }
@@ -327,46 +357,62 @@ async function editarRequerimiento(id) {
 }
 window.editarRequerimiento = editarRequerimiento;
 
+
 function filtrarTablaServicios() {
     const input = document.getElementById('buscadorServicios');
     const filtro = input.value.toUpperCase();
+    // Usar los datos actualmente renderizados (que ya están ordenados) para el filtrado visual
+    // O, si se prefiere, filtrar sobre datosOriginalesRequerimientos y luego re-renderizar.
+    // Para simplicidad y performance en el cliente, filtramos lo que ya está en el DOM.
     const tabla = document.getElementById('tablaRequerimientos');
     const filas = tabla.getElementsByTagName('tr');
 
     // Empezar desde 1 para saltar la fila de cabeceras (<tr><th>...</th></tr>)
-    for (let i = 1; i < filas.length; i++) {
+    for (let i = 1; i < filas.length; i++) { // Asumiendo que la primera fila es la cabecera
         const filaActual = filas[i];
         const celdas = filaActual.getElementsByTagName('td');
         let visible = false;
-        for (let j = 0; j < celdas.length; j++) { // Iterar sobre todas las celdas EXCEPTO las de acciones
-            // No buscar en la columna de botones de "Acciones" ni "Programaciones"
-            // Asumiendo que estas son las últimas 2 columnas
-            if (j < celdas.length - 2) { 
-                const celda = celdas[j];
-                if (celda) {
-                    const textoCelda = celda.textContent || celda.innerText;
-                    if (textoCelda.toUpperCase().indexOf(filtro) > -1) {
-                        visible = true;
-                        break; // Si una celda coincide, la fila es visible
-                    }
+        // Iterar sobre todas las celdas EXCEPTO las de acciones y programaciones
+        for (let j = 0; j < celdas.length - 2; j++) { // Ajustar el -2 si cambia el número de columnas de acción
+            const celda = celdas[j];
+            if (celda) {
+                const textoCelda = celda.textContent || celda.innerText;
+                if (textoCelda.toUpperCase().indexOf(filtro) > -1) {
+                    visible = true;
+                    break; // Si una celda coincide, la fila es visible
                 }
             }
         }
         filaActual.style.display = visible ? "" : "none";
     }
 }
-// Para que la función sea accesible desde el onkeyup en el HTML
 window.filtrarTablaServicios = filtrarTablaServicios;
+
 
 async function eliminarRequerimiento(id) {
     if (confirm('¿Estás seguro de eliminar este servicio y TODAS sus programaciones asociadas? Esta acción no se puede deshacer.')) {
+        const batch = writeBatch(db);
         try {
-            console.warn(`Eliminando requerimiento ${id}. Sus programaciones quedarán huérfanas si no se eliminan por separado (requiere Cloud Function para eliminación en cascada).`);
-            await deleteDoc(doc(db, "requerimientos", id));
-            alert('Servicio eliminado con éxito. (Las programaciones individuales no se eliminan automáticamente con esta acción).');
-            cargarRequerimientos();
+            // Eliminar el requerimiento principal
+            const reqDocRef = doc(db, "requerimientos", id);
+            batch.delete(reqDocRef);
+
+            // Eliminar todas las subcolecciones de programaciones (si las hubiera)
+            // Esto requiere listar primero las programaciones para este requerimiento
+            const programacionesRef = collection(db, "requerimientos", id, "programaciones");
+            const programacionesSnap = await getDocs(programacionesRef);
+            programacionesSnap.forEach(progDoc => {
+                batch.delete(progDoc.ref);
+            });
+
+            await batch.commit();
+            alert('Servicio y sus programaciones eliminados con éxito.');
+            datosOriginalesRequerimientos = datosOriginalesRequerimientos.filter(item => item.id !== id); // Actualizar datos locales
+            ordenarYRenderizarDatos(ordenActual.columna, ordenActual.direccion, ordenActual.columnaIndiceDOM); // Re-renderizar
+            // Si se prefiere siempre recargar de Firebase:
+            // cargarRequerimientos();
         } catch (error) {
-            console.error("Error al eliminar servicio:", error);
+            console.error("Error al eliminar servicio y sus programaciones:", error);
             alert('Error al eliminar el servicio.');
         }
     }
@@ -381,7 +427,7 @@ function poblarCheckboxesTecnicos() {
         console.error("Contenedor de checkboxes para técnicos ('modalTecnicosCheckboxContainer') no encontrado.");
         return;
     }
-    container.innerHTML = ''; 
+    container.innerHTML = ''; // Limpiar existentes
 
     if (!LISTA_TECNICOS_PREDEFINIDOS || LISTA_TECNICOS_PREDEFINIDOS.length === 0) {
         container.innerHTML = '<p>No hay técnicos predefinidos en la lista.</p>';
@@ -391,20 +437,22 @@ function poblarCheckboxesTecnicos() {
     LISTA_TECNICOS_PREDEFINIDOS.forEach(tecnico => {
         const labelEl = document.createElement('label');
         const checkboxEl = document.createElement('input');
-        
+
         checkboxEl.type = 'checkbox';
-        checkboxEl.name = 'modalTecnicos'; 
+        checkboxEl.name = 'modalTecnicos'; // Importante para agruparlos
         checkboxEl.value = tecnico;
-        const tecnicoIdSanitized = tecnico.replace(/[^a-zA-Z0-9-_]/g, '');
-        checkboxEl.id = `tec-check-${tecnicoIdSanitized}-${Math.random().toString(36).substr(2, 5)}`;
+        // Crear un ID único y válido para el checkbox y el label's 'for'
+        const tecnicoIdSanitized = tecnico.replace(/[^a-zA-Z0-9-_]/g, ''); // Sanitizar para ID
+        checkboxEl.id = `tec-check-${tecnicoIdSanitized}-${Math.random().toString(36).substr(2, 5)}`; // Añadir aleatorio para unicidad
 
         labelEl.appendChild(checkboxEl);
-        labelEl.appendChild(document.createTextNode(` ${tecnico}`));
-        labelEl.htmlFor = checkboxEl.id; 
+        labelEl.appendChild(document.createTextNode(` ${tecnico}`)); // Espacio antes del nombre
+        labelEl.htmlFor = checkboxEl.id; // Conectar label con checkbox
         container.appendChild(labelEl);
     });
     console.log("Checkboxes de técnicos poblados en el modal.");
 }
+
 
 function abrirModalProgramaciones(requerimientoId, reqNombre) {
     if (!currentRequerimientoIdInput || !modalTituloRequerimiento || !formAddProgramacion || !modalProgramaciones || !listaProgramacionesContainer) {
@@ -414,23 +462,24 @@ function abrirModalProgramaciones(requerimientoId, reqNombre) {
     }
     currentRequerimientoIdInput.value = requerimientoId;
     modalTituloRequerimiento.textContent = `Gestionar Programaciones para REQ: ${reqNombre}`;
-    formAddProgramacion.reset(); 
-    
+    formAddProgramacion.reset(); // Limpiar el formulario de añadir programación
+
+    // Desmarcar checkboxes de técnicos
     document.querySelectorAll('#modalTecnicosCheckboxContainer input[name="modalTecnicos"]:checked').forEach(cb => {
         cb.checked = false;
     });
-    
-    poblarCheckboxesTecnicos(); 
+
+    poblarCheckboxesTecnicos(); // Siempre repoblar por si la lista de técnicos cambia dinámicamente (aunque aquí es fija)
 
     cargarProgramacionesExistentes(requerimientoId);
     modalProgramaciones.style.display = 'block';
 }
-window.gestionarProgramaciones = abrirModalProgramaciones;
+window.gestionarProgramaciones = abrirModalProgramaciones; // Hacer global
 
 function cerrarModalProgramaciones() {
     if(modalProgramaciones) modalProgramaciones.style.display = 'none';
 }
-window.cerrarModalProgramaciones = cerrarModalProgramaciones;
+window.cerrarModalProgramaciones = cerrarModalProgramaciones; // Hacer global
 
 if (formAddProgramacion) {
     formAddProgramacion.addEventListener('submit', async (e) => {
@@ -457,7 +506,7 @@ if (formAddProgramacion) {
             tecnicosAsignados: tecnicosAsignados,
             estadoProgramacion: document.getElementById('modalEstadoProgramacion').value,
             notasProgramacion: document.getElementById('modalNotasProgramacion').value.trim(),
-            timestampCreacion: serverTimestamp()
+            timestampCreacion: serverTimestamp() // Para ordenar/auditar
         };
 
         if (!programacionData.fechaProgramada || !programacionData.horaInicio || !programacionData.horaFin || !programacionData.tipoTarea) {
@@ -474,10 +523,15 @@ if (formAddProgramacion) {
             await addDoc(programacionesRef, programacionData);
             alert('Programación guardada con éxito!');
             formAddProgramacion.reset();
+            // Desmarcar checkboxes
             document.querySelectorAll('#modalTecnicosCheckboxContainer input[name="modalTecnicos"]:checked').forEach(cb => {
                 cb.checked = false;
             });
-            cargarProgramacionesExistentes(requerimientoId);
+            cargarProgramacionesExistentes(requerimientoId); // Recargar la lista
+            // Si el calendario está visible, considerar actualizarlo también
+            if (document.getElementById('vista-planificacion').style.display === 'block') {
+                inicializarOActualizarCalendario();
+            }
         } catch (error) {
             console.error("Error al guardar programación:", error);
             alert('Error al guardar la programación.');
@@ -493,9 +547,9 @@ async function cargarProgramacionesExistentes(requerimientoId) {
         return;
     }
     listaProgramacionesContainer.innerHTML = '<p>Cargando programaciones...</p>';
-    
+
     const programacionesRef = collection(db, "requerimientos", requerimientoId, "programaciones");
-    const q = query(programacionesRef, orderBy("timestampCreacion", "desc"));
+    const q = query(programacionesRef, orderBy("timestampCreacion", "desc")); // O por fechaProgramada
 
     try {
         const querySnapshot = await getDocs(q);
@@ -533,34 +587,35 @@ async function eliminarProgramacion(requerimientoId, programacionId) {
             const programacionDocRef = doc(db, "requerimientos", requerimientoId, "programaciones", programacionId);
             await deleteDoc(programacionDocRef);
             alert("Programación eliminada.");
-            cargarProgramacionesExistentes(requerimientoId);
+            cargarProgramacionesExistentes(requerimientoId); // Recargar lista en modal
+            // Si el calendario está visible, considerar actualizarlo también
+             if (document.getElementById('vista-planificacion').style.display === 'block') {
+                inicializarOActualizarCalendario();
+            }
         } catch (error) {
             console.error("Error al eliminar programación:", error);
             alert("Error al eliminar programación.");
         }
     }
 }
-window.eliminarProgramacion = eliminarProgramacion;
+window.eliminarProgramacion = eliminarProgramacion; // Hacer global
+
 
 // --- LÓGICA DE GRÁFICOS (ESTADÍSTICAS) ---
 let graficoEstatusReq = null;
 let graficoCanal = null;
-
-// Variables globales para los nuevos gráficos (cerca de las otras de gráficos)
 let graficoTiempo1raProg = null;
 let graficoTiempoTotal = null;
 
-// Función auxiliar para calcular diferencia en días
 function diferenciaEnDias(fechaInicioStr, fechaFinStr) {
     if (!fechaInicioStr || !fechaFinStr) return null;
-    const inicio = new Date(fechaInicioStr + 'T00:00:00Z'); // Asegurar UTC para evitar problemas de zona
+    const inicio = new Date(fechaInicioStr + 'T00:00:00Z');
     const fin = new Date(fechaFinStr + 'T00:00:00Z');
     if (isNaN(inicio.getTime()) || isNaN(fin.getTime())) return null;
     const diffTiempo = fin.getTime() - inicio.getTime();
-    if (diffTiempo < 0) return null; // Fecha fin no puede ser antes que inicio para este cálculo
-    return Math.ceil(diffTiempo / (1000 * 3600 * 24)); // Math.ceil para redondear hacia arriba
+    if (diffTiempo < 0) return null; // Fecha fin no puede ser antes que inicio
+    return Math.ceil(diffTiempo / (1000 * 3600 * 24));
 }
-
 
 async function cargarDatosParaGraficosEstadisticas() {
     console.log("app.js: cargarDatosParaGraficosEstadisticas called.");
@@ -570,24 +625,23 @@ async function cargarDatosParaGraficosEstadisticas() {
 
         for (const reqDoc of requerimientosSnapshot.docs) {
             const reqData = reqDoc.data();
-            reqData.id = reqDoc.id; // Guardar el ID por si lo necesitamos
+            reqData.id = reqDoc.id;
 
-            // Obtener la primera programación para este requerimiento
             const progRef = collection(db, "requerimientos", reqDoc.id, "programaciones");
-            const qPrimeraProg = query(progRef, orderBy("fechaProgramada", "asc"), orderBy("timestampCreacion", "asc"), limit(1)); // limit(1) no está en SDK v9 web, quitarlo. Ordenar y tomar el primero.
-            // Corrección: Firestore web SDK no soporta limit(1) directamente en query.
-            // Haremos el query y tomaremos el primer documento.
-            
+            // Para Firestore Web SDK v9, no usamos limit(1) directamente en query, sino que obtenemos y tomamos el primero.
+            const qPrimeraProg = query(progRef, orderBy("fechaProgramada", "asc"), orderBy("timestampCreacion", "asc"));
+
             let primeraFechaProgramada = null;
             try {
                 const primerasProgSnapshot = await getDocs(qPrimeraProg);
                 if (!primerasProgSnapshot.empty) {
+                    // Tomar el primer documento de la instantánea ordenada
                     primeraFechaProgramada = primerasProgSnapshot.docs[0].data().fechaProgramada;
                 }
             } catch (e) {
-                console.warn(`No se pudo obtener programaciones para ${reqData.req} o no tiene: ${e.message}`);
+                // No es crítico si un requerimiento no tiene programaciones, solo se omite para ese cálculo.
+                console.warn(`No se pudo obtener programaciones para ${reqData.req || reqData.id} o no tiene: ${e.message}`);
             }
-
 
             dataParaGraficos.push({
                 ...reqData,
@@ -595,9 +649,7 @@ async function cargarDatosParaGraficosEstadisticas() {
             });
         }
 
-        console.log("Datos preparados para gráficos:", dataParaGraficos);
-
-        // --- Gráfico por Estatus de Requerimiento (como estaba) ---
+        // Gráfico por Estatus de Requerimiento
         const conteoEstatus = dataParaGraficos.reduce((acc, curr) => {
             if(curr.estatusRequerimiento) acc[curr.estatusRequerimiento] = (acc[curr.estatusRequerimiento] || 0) + 1;
             return acc;
@@ -605,17 +657,17 @@ async function cargarDatosParaGraficosEstadisticas() {
         const ctxEstatus = document.getElementById('graficoEstatusRequerimiento')?.getContext('2d');
         if (ctxEstatus) {
             if (graficoEstatusReq) graficoEstatusReq.destroy();
-            graficoEstatusReq = new Chart(ctxEstatus, { /* ...configuración igual que antes... */ 
+            graficoEstatusReq = new Chart(ctxEstatus, {
                 type: 'pie',
                 data: {
                     labels: Object.keys(conteoEstatus),
-                    datasets: [{ data: Object.values(conteoEstatus), backgroundColor: ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#27ae60', '#f39c12'] }]
+                    datasets: [{ data: Object.values(conteoEstatus), backgroundColor: ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#27ae60', '#f39c12', '#c0392b'] }] // Añadí más colores por si hay más estados
                 },
                 options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top'}}}
             });
         }
 
-        // --- Gráfico por Canal de Entrada (como estaba) ---
+        // Gráfico por Canal de Entrada
         const conteoCanales = dataParaGraficos.reduce((acc, curr) => {
             if(curr.canalEntrada) acc[curr.canalEntrada] = (acc[curr.canalEntrada] || 0) + 1;
             return acc;
@@ -623,7 +675,7 @@ async function cargarDatosParaGraficosEstadisticas() {
         const ctxCanal = document.getElementById('graficoCanalEntrada')?.getContext('2d');
         if (ctxCanal) {
             if (graficoCanal) graficoCanal.destroy();
-            graficoCanal = new Chart(ctxCanal, { /* ...configuración igual que antes... */ 
+            graficoCanal = new Chart(ctxCanal, {
                 type: 'bar',
                 data: {
                     labels: Object.keys(conteoCanales),
@@ -633,17 +685,16 @@ async function cargarDatosParaGraficosEstadisticas() {
             });
         }
 
-        // --- NUEVO GRÁFICO 1: Tiempo Promedio Recepción a 1ra Programación ---
+        // Gráfico Tiempo Promedio Recepción a 1ra Programación
         const tiemposRecepcionAProgramacion = [];
         dataParaGraficos.forEach(req => {
             if (req.fechaRecepcion && req.primeraFechaProgramada) {
                 const diff = diferenciaEnDias(req.fechaRecepcion, req.primeraFechaProgramada);
-                if (diff !== null && diff >= 0) { // Solo considerar si la programación es después o el mismo día de la recepción
+                if (diff !== null && diff >= 0) {
                     tiemposRecepcionAProgramacion.push(diff);
                 }
             }
         });
-
         const ctxTiempo1Prog = document.getElementById('graficoTiempoPrimeraProgramacion')?.getContext('2d');
         if (ctxTiempo1Prog) {
             if (graficoTiempo1raProg) graficoTiempo1raProg.destroy();
@@ -651,15 +702,13 @@ async function cargarDatosParaGraficosEstadisticas() {
             if (tiemposRecepcionAProgramacion.length > 0) {
                 promedioTiempo1Prog = tiemposRecepcionAProgramacion.reduce((a, b) => a + b, 0) / tiemposRecepcionAProgramacion.length;
             }
-            // Podríamos hacer un histograma o simplemente mostrar el promedio
-            // Por simplicidad, un gráfico de barras con una sola barra para el promedio
             graficoTiempo1raProg = new Chart(ctxTiempo1Prog, {
                 type: 'bar',
                 data: {
                     labels: ['Promedio (días)'],
                     datasets: [{
                         label: 'Tiempo Recepción a 1ra Programación',
-                        data: [promedioTiempo1Prog.toFixed(1)], // Mostrar con 1 decimal
+                        data: [promedioTiempo1Prog.toFixed(1)],
                         backgroundColor: ['#FF9F40']
                     }]
                 },
@@ -667,10 +716,9 @@ async function cargarDatosParaGraficosEstadisticas() {
             });
         }
 
-        // --- NUEVO GRÁFICO 2: Tiempo Promedio Recepción a Término Servicio ---
+        // Gráfico Tiempo Promedio Recepción a Término Servicio
         const tiemposRecepcionATermino = [];
         dataParaGraficos.forEach(req => {
-            // Solo considerar si el servicio tiene estatus "Resuelto" y tiene fecha de término
             if (req.estatusRequerimiento === 'Resuelto' && req.fechaRecepcion && req.fechaTerminoServicio) {
                 const diff = diferenciaEnDias(req.fechaRecepcion, req.fechaTerminoServicio);
                  if (diff !== null && diff >= 0) {
@@ -704,10 +752,8 @@ async function cargarDatosParaGraficosEstadisticas() {
     }
 }
 
-// --- LÓGICA DEL CALENDARIO ---
-// (Esta es la versión que intenta usar resourceTimeGridDay, etc.)
-// (Asegúrate de que los plugins de FullCalendar estén correctamente enlazados en index.html)
-// --- LÓGICA DEL CALENDARIO (VERSIÓN CON VISTAS ESTÁNDAR - SIN RECURSOS) ---
+
+// --- LÓGICA DEL CALENDARIO (VISTAS ESTÁNDAR - SIN RECURSOS) ---
 async function inicializarOActualizarCalendario() {
     console.log("CALENDARIO: Iniciando inicializarOActualizarCalendario (Vistas Estándar)...");
     const calendarEl = document.getElementById('calendarioFullCalendar');
@@ -716,18 +762,19 @@ async function inicializarOActualizarCalendario() {
         return;
     }
 
-    calendarEl.innerHTML = '<p>Cargando calendario y programaciones...</p>';
+    calendarEl.innerHTML = '<p>Cargando calendario y programaciones...</p>'; // Mensaje de carga
 
-    if (!FullCalendar) {
-        console.error("CALENDARIO: FullCalendar no está definido. Revisa la etiqueta <script> en index.html.");
-        calendarEl.innerHTML = "<p>Error: Librería FullCalendar no cargada.</p>";
+    if (typeof FullCalendar === 'undefined' || !FullCalendar || !FullCalendar.Calendar) {
+        console.error("CALENDARIO: FullCalendar no está definido o no es accesible. Revisa la etiqueta <script> en index.html y asegúrate que se cargue antes que app.js o que esté disponible globalmente.");
+        calendarEl.innerHTML = "<p>Error: Librería FullCalendar no cargada o inaccesible.</p>";
         return;
     }
     console.log("CALENDARIO: FullCalendar está definido.");
 
     const programacionesParaEventos = [];
     try {
-        console.log("CALENDARIO: Intentando obtener programaciones desde Firestore...");
+        console.log("CALENDARIO: Intentando obtener programaciones desde Firestore usando collectionGroup...");
+        // Usar collectionGroup para obtener todas las 'programaciones' de todos los 'requerimientos'
         const qProgramaciones = query(collectionGroup(db, 'programaciones'), orderBy('timestampCreacion', 'desc'));
         const snapshotProgramaciones = await getDocs(qProgramaciones);
         console.log(`CALENDARIO: Se encontraron ${snapshotProgramaciones.docs.length} documentos de programaciones.`);
@@ -738,20 +785,19 @@ async function inicializarOActualizarCalendario() {
 
         for (const progDoc of snapshotProgramaciones.docs) {
             const progData = progDoc.data();
-            const requerimientoRef = progDoc.ref.parent.parent;
-            let reqDataParaTitulo = { req: '?', cliente: '?' };
-
-            console.log(`CALENDARIO: Procesando programación ID: ${progDoc.id}, Fecha: ${progData.fechaProgramada}`);
+            // El documento padre (requerimiento) se puede obtener de la referencia del documento de programación
+            const requerimientoRef = progDoc.ref.parent.parent; // progDoc.ref -> programacionRef.parent -> programacionesCollectionRef.parent -> requerimientoDocRef
+            let reqDataParaTitulo = { req: '?', cliente: '?' }; // Valores por defecto
 
             if (requerimientoRef) {
                 try {
                     const reqSnap = await getDoc(requerimientoRef);
                     if (reqSnap.exists()) {
                         const rData = reqSnap.data();
-                        reqDataParaTitulo.req = rData.req || '?';
+                        reqDataParaTitulo.req = rData.req || '?'; // Usar '?' si el campo req no existe
                         reqDataParaTitulo.cliente = rData.cliente || '?';
                     } else {
-                        console.warn(`CALENDARIO: Documento de requerimiento padre no encontrado para programación ${progDoc.id}`);
+                        console.warn(`CALENDARIO: Documento de requerimiento padre (ID: ${requerimientoRef.id}) no encontrado para programación ${progDoc.id}`);
                     }
                 } catch (errGetParent) {
                     console.error(`CALENDARIO: Error obteniendo documento padre para programación ${progDoc.id}:`, errGetParent);
@@ -759,50 +805,54 @@ async function inicializarOActualizarCalendario() {
             } else {
                  console.warn(`CALENDARIO: No se pudo obtener la referencia al requerimiento padre para programación ${progDoc.id}`);
             }
-            
+
             let startDateTime, endDateTime;
             if (progData.fechaProgramada && progData.horaInicio) {
                 startDateTime = `${progData.fechaProgramada}T${progData.horaInicio}`;
-            } else { 
+            } else {
                 console.warn(`CALENDARIO: Programación ${progDoc.id} con datos de fecha/hora incompletos. Omitiendo.`);
-                continue; 
+                continue; // Saltar esta programación si no tiene fecha/hora de inicio
             }
 
             if (progData.fechaProgramada && progData.horaFin) {
                 endDateTime = `${progData.fechaProgramada}T${progData.horaFin}`;
-            } else { 
-                console.warn(`CALENDARIO: Programación ${progDoc.id} sin horaFin. Asumiendo 1 hora de duración.`);
+            } else { // Si no hay horaFin, podemos omitirla o asumir una duración (FullCalendar puede manejar eventos sin fin)
+                console.warn(`CALENDARIO: Programación ${progDoc.id} sin horaFin. El evento podría no tener duración visible en algunas vistas o asumir una por defecto.`);
+                // Opcional: calcular una hora de fin por defecto, por ejemplo, 1 hora después del inicio
                 try {
                     const startDateObj = new Date(startDateTime);
                     if(isNaN(startDateObj.getTime())) throw new Error("Fecha de inicio inválida para calcular fin");
                     startDateObj.setHours(startDateObj.getHours() + 1);
-                    endDateTime = startDateObj.toISOString().split('.')[0]; 
+                    // Formato YYYY-MM-DDTHH:MM:SS
+                    endDateTime = startDateObj.toISOString().substring(0, 19);
                 } catch (e) {
                      console.error(`CALENDARIO: Error calculando horaFin para ${progDoc.id}`, e);
-                     endDateTime = startDateTime; 
+                     endDateTime = startDateTime; // Como fallback, o dejarlo null/undefined
                 }
             }
-            
+
             const tecnicosTexto = progData.tecnicosAsignados && progData.tecnicosAsignados.length > 0 ?
-                                  progData.tecnicosAsignados.join(', ') : 'S/A';
+                                  progData.tecnicosAsignados.join(', ') : 'S/A'; // Sin Asignar
 
             programacionesParaEventos.push({
-                id: progDoc.id, 
-                requerimientoId: requerimientoRef ? requerimientoRef.id : null,
-                title: `REQ:${reqDataParaTitulo.req} (${reqDataParaTitulo.cliente || ''}) - ${progData.tipoTarea || 'Tarea'} [Téc: ${tecnicosTexto}]`,
+                id: progDoc.id, // ID de la programación
+                requerimientoId: requerimientoRef ? requerimientoRef.id : null, // ID del requerimiento padre
+                title: `REQ:${reqDataParaTitulo.req} (${reqDataParaTitulo.cliente}) - ${progData.tipoTarea || 'Tarea'} [Téc: ${tecnicosTexto}]`,
                 start: startDateTime,
                 end: endDateTime,
-                extendedProps: {
-                    tecnicosOriginales: progData.tecnicosAsignados || [], 
+                extendedProps: { // Propiedades personalizadas para mostrar en el clic o para lógica adicional
+                    tecnicosOriginales: progData.tecnicosAsignados || [], // Guardar la lista original de técnicos
                     estado: progData.estadoProgramacion || '',
                     notas: progData.notasProgramacion || '',
                     reqNombre: reqDataParaTitulo.req,
                     clienteNombre: reqDataParaTitulo.cliente,
                     tipoTareaOriginal: progData.tipoTarea
                 },
+                // backgroundColor: getColorForEstado(progData.estadoProgramacion), // Opcional: color según estado
+                // borderColor: getColorForEstado(progData.estadoProgramacion)
             });
         }
-        
+
         console.log(`CALENDARIO: Se procesaron ${programacionesParaEventos.length} eventos para el calendario.`);
 
     } catch (error) {
@@ -810,10 +860,11 @@ async function inicializarOActualizarCalendario() {
         if (calendarEl) {
              calendarEl.innerHTML = "<p>Error al cargar datos para el calendario. Revisa la consola (F12).</p>";
         }
-        if (error.message && error.message.toLowerCase().includes("index")) {
-            alert("Error de Firestore: El índice necesario para el calendario aún no está listo o falta. Por favor, créalo usando el enlace que aparece en la consola y espera a que se habilite.");
+        // Si el error es de índice de Firestore (común con collectionGroup la primera vez)
+        if (error.message && (error.message.toLowerCase().includes("index") || error.message.toLowerCase().includes("índice"))) {
+            alert("Error de Firestore: El índice necesario para el calendario aún no está listo o falta. Por favor, créalo usando el enlace que podría aparecer en la consola de errores del navegador y espera a que se habilite (puede tardar unos minutos).");
         }
-        return; 
+        return; // No continuar si hay error
     }
 
     if (calendarioFullCalendar) {
@@ -821,44 +872,54 @@ async function inicializarOActualizarCalendario() {
         calendarioFullCalendar.destroy();
         calendarioFullCalendar = null;
     }
-    
+
     try {
         console.log("CALENDARIO: Creando nueva instancia de FullCalendar (Vistas Estándar).");
         calendarioFullCalendar = new FullCalendar.Calendar(calendarEl, {
-            locale: 'es',
-            initialView: 'timeGridWeek', // Usamos vistas estándar
+            locale: 'es', // Para idioma español
+            initialView: 'timeGridWeek', // Vista inicial
             headerToolbar: {
                 left: 'prev,next today',
                 center: 'title',
-                right: 'dayGridMonth,timeGridWeek,timeGridDay,listWeek' // Vistas estándar
+                right: 'dayGridMonth,timeGridWeek,timeGridDay,listWeek' // Botones de vistas
             },
-            views: { 
+            views: { // Personalizar texto de botones si es necesario
                 timeGridDay: { buttonText: 'Día' },
                 timeGridWeek: { buttonText: 'Semana' },
                 dayGridMonth: { buttonText: 'Mes' },
                 listWeek: { buttonText: 'Lista' }
             },
-            editable: false, 
-            selectable: true, 
-            events: programacionesParaEventos,
-            contentHeight: 'auto',
-            nowIndicator: true,
-            slotEventOverlap: false, 
+            editable: false, // Los eventos no se pueden arrastrar ni redimensionar
+            selectable: true, // Permitir seleccionar rangos de fechas/horas (para posible creación de eventos)
+            events: programacionesParaEventos, // Aquí van los eventos cargados
+            contentHeight: 'auto', // Altura se ajusta al contenido
+            nowIndicator: true, // Muestra un indicador de la hora actual
+            slotMinTime: "07:00:00", // Hora de inicio de la cuadrícula
+            slotMaxTime: "21:00:00", // Hora de fin de la cuadrícula
+            slotEventOverlap: false, // Evitar que los eventos se superpongan visualmente si tienen el mismo recurso (no aplica aquí sin recursos)
 
-            eventClick: function(info) {
+            eventClick: function(info) { // Manejador de clic en un evento
                 const evento = info.event;
                 const props = evento.extendedProps;
                 alert(
                     `Servicio REQ: ${props.reqNombre || (evento.title.match(/REQ:([^ ]+)/) ? evento.title.match(/REQ:([^ ]+)/)[1] : '?')}\n` +
                     `Cliente: ${props.clienteNombre || (evento.title.match(/\(([^)]+)\)/) ? evento.title.match(/\(([^)]+)\)/)[1] : '?') }\n` +
-                    `Tarea: ${props.tipoTareaOriginal || (evento.title.split(' - ')[1] ? evento.title.split(' - ')[1].split(' (')[0] : '?')}\n` +
+                    `Tarea: ${props.tipoTareaOriginal || (evento.title.split(' - ')[1] ? evento.title.split(' - ')[1].split(' [')[0] : '?')}\n` + // Ajuste para extraer la tarea
                     `Fecha: ${evento.start ? evento.start.toLocaleDateString('es-CL') : 'N/A'}\n` +
                     `Hora: ${evento.start ? evento.start.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit'}) : ''} - ${evento.end ? evento.end.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit'}) : ''}\n` +
                     `Técnicos: ${props.tecnicosOriginales ? props.tecnicosOriginales.join(', ') : 'No asignados'}\n` +
                     `Estado: ${props.estado || 'N/A'}\n` +
                     `Notas: ${props.notas || ''}`
                 );
+                // Aquí podrías abrir el modal de edición de programación si lo implementas
+                // window.gestionarProgramaciones(evento.extendedProps.requerimientoId, evento.extendedProps.reqNombre);
+                // Y luego cargar los datos de este evento específico en el modal.
             },
+            // Opcional: Manejador para seleccionar un rango de fechas/horas
+            // select: function(selectInfo) {
+            //     alert('Seleccionado desde ' + selectInfo.startStr + ' hasta ' + selectInfo.endStr);
+            //     // Aquí podrías abrir el modal para crear una nueva programación con estas fechas preseleccionadas
+            // }
         });
         calendarioFullCalendar.render();
         console.log("CALENDARIO: Calendario (Vistas Estándar) renderizado.");
@@ -869,9 +930,8 @@ async function inicializarOActualizarCalendario() {
 }
 
 // --- LÓGICA DE CARGA MASIVA (COMENTADA - NECESITA REFACTORIZACIÓN COMPLETA) ---
-const csvFileInput = document.getElementById('csvFile'); // Esto podría ser null si la sección está comentada
-const btnProcesarCsv = document.getElementById('btnProcesarCsv'); // Esto podría ser null
-// const cargaMasivaLog = document.getElementById('cargaMasivaLog'); // Ya no se usa directamente aquí
+const csvFileInput = document.getElementById('csvFile');
+const btnProcesarCsv = document.getElementById('btnProcesarCsv');
 if (btnProcesarCsv) {
     btnProcesarCsv.addEventListener('click', () => {
         alert("La carga masiva está actualmente deshabilitada y necesita ser rediseñada para la nueva estructura de datos con múltiples programaciones por servicio.");
@@ -887,9 +947,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // Comprobaciones adicionales para elementos del DOM del modal
     if (!modalProgramaciones) console.error("Elemento modalGestionProgramaciones no encontrado.");
     if (!formAddProgramacion) console.warn("Elemento formAddProgramacion no encontrado. El listener no se añadirá.");
-    
+
+    // Inicializar la vista de 'entrada-requerimiento' o la que prefieras por defecto
     mostrarVista('vista-entrada-requerimiento');
+    // O si quieres la tabla de visualización por defecto:
+    // mostrarVista('vista-visualizacion');
 });
 
 console.log("app.js: <<< Script execution finished.");
-
