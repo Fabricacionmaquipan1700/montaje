@@ -18,6 +18,18 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const requerimientosCollectionRef = collection(db, "requerimientos");
+
+// LISTA DE TÉCNICOS PREDEFINIDA (¡Actualiza esta lista con tus técnicos reales!)
+const LISTA_TECNICOS_PREDEFINIDOS = [
+    "Alejandro Arias", "Alejandro Mena", "Alejandro Robles", "Ana Reyes",
+    "Bastian Garrido", "Beato Paula", "Carlos Soto", "Claudio Lopez",
+    "Diego Valderas", "Enrico Ramirez", "Enzo Rodriguez", "Felipe Santos",
+    "Fredy Gallardo", "Gerardo Calderon", "Juan Perez", "Laura Pausini",
+    "Luis Soto", "Octavio Henriquez", "Pedro Lara", "Sergio Valencia",
+    "TECNICO SIN ASIGNAR"
+].sort();
+console.log("app.js: Lista de técnicos predefinidos cargada.");
+
 console.log("app.js: Firebase initialized.");
 
 // --- ELEMENTOS DEL DOM ---
@@ -110,7 +122,8 @@ if (formRequerimiento) {
                 delete formRequerimiento.dataset.editingId;
             } else {
                 requerimientoData.timestamp = serverTimestamp();
-                const docRef = await addDoc(requerimientosCollectionRef, requerimientoData);
+                // const docRef = // No necesitamos la referencia aquí si no abrimos el modal automáticamente
+                await addDoc(requerimientosCollectionRef, requerimientoData);
                 alert('Servicio guardado con éxito! Ahora puedes añadir programaciones desde "Ver Servicios".');
             }
             formRequerimiento.reset();
@@ -124,6 +137,7 @@ if (formRequerimiento) {
 } else {
     console.warn("Elemento formRequerimiento no encontrado al cargar la página.");
 }
+
 
 async function cargarRequerimientos() {
     console.log("app.js: cargarRequerimientos called.");
@@ -210,9 +224,7 @@ window.editarRequerimiento = editarRequerimiento;
 async function eliminarRequerimiento(id) {
     if (confirm('¿Estás seguro de eliminar este servicio y TODAS sus programaciones asociadas? Esta acción no se puede deshacer.')) {
         try {
-            // TODO: Implementar eliminación de subcolección 'programaciones' (idealmente con Cloud Function)
-            // Por ahora, solo eliminamos el requerimiento principal.
-            console.warn(`Eliminando requerimiento ${id}. Sus programaciones quedarán huérfanas si no se eliminan por separado.`);
+            console.warn(`Eliminando requerimiento ${id}. Sus programaciones quedarán huérfanas si no se eliminan por separado (requiere Cloud Function para eliminación en cascada).`);
             await deleteDoc(doc(db, "requerimientos", id));
             alert('Servicio eliminado con éxito. (Las programaciones individuales no se eliminan automáticamente con esta acción).');
             cargarRequerimientos();
@@ -224,7 +236,39 @@ async function eliminarRequerimiento(id) {
 }
 window.eliminarRequerimiento = eliminarRequerimiento;
 
+
 // --- GESTIÓN DE PROGRAMACIONES (MODAL) ---
+function poblarCheckboxesTecnicos() {
+    const container = document.getElementById('modalTecnicosCheckboxContainer');
+    if (!container) {
+        console.error("Contenedor de checkboxes para técnicos ('modalTecnicosCheckboxContainer') no encontrado.");
+        return;
+    }
+    container.innerHTML = ''; 
+
+    if (!LISTA_TECNICOS_PREDEFINIDOS || LISTA_TECNICOS_PREDEFINIDOS.length === 0) {
+        container.innerHTML = '<p>No hay técnicos predefinidos en la lista.</p>';
+        return;
+    }
+
+    LISTA_TECNICOS_PREDEFINIDOS.forEach(tecnico => {
+        const labelEl = document.createElement('label');
+        const checkboxEl = document.createElement('input');
+        
+        checkboxEl.type = 'checkbox';
+        checkboxEl.name = 'modalTecnicos'; 
+        checkboxEl.value = tecnico;
+        const tecnicoIdSanitized = tecnico.replace(/[^a-zA-Z0-9-_]/g, '');
+        checkboxEl.id = `tec-check-${tecnicoIdSanitized}-${Math.random().toString(36).substr(2, 5)}`;
+
+        labelEl.appendChild(checkboxEl);
+        labelEl.appendChild(document.createTextNode(` ${tecnico}`));
+        labelEl.htmlFor = checkboxEl.id; 
+        container.appendChild(labelEl);
+    });
+    console.log("Checkboxes de técnicos poblados en el modal.");
+}
+
 function abrirModalProgramaciones(requerimientoId, reqNombre) {
     if (!currentRequerimientoIdInput || !modalTituloRequerimiento || !formAddProgramacion || !modalProgramaciones || !listaProgramacionesContainer) {
         console.error("Error: Elementos del modal de programaciones no encontrados en el DOM.");
@@ -233,7 +277,14 @@ function abrirModalProgramaciones(requerimientoId, reqNombre) {
     }
     currentRequerimientoIdInput.value = requerimientoId;
     modalTituloRequerimiento.textContent = `Gestionar Programaciones para REQ: ${reqNombre}`;
-    formAddProgramacion.reset();
+    formAddProgramacion.reset(); 
+    
+    document.querySelectorAll('#modalTecnicosCheckboxContainer input[name="modalTecnicos"]:checked').forEach(cb => {
+        cb.checked = false;
+    });
+    
+    poblarCheckboxesTecnicos(); 
+
     cargarProgramacionesExistentes(requerimientoId);
     modalProgramaciones.style.display = 'block';
 }
@@ -253,11 +304,11 @@ if (formAddProgramacion) {
             return;
         }
 
-        const tecnicosAsignados = document.getElementById('modalTecnicosAsignados').value.split(',')
-            .map(t => t.trim()).filter(t => t !== "");
+        const checkboxesTecnicos = document.querySelectorAll('#modalTecnicosCheckboxContainer input[name="modalTecnicos"]:checked');
+        const tecnicosAsignados = Array.from(checkboxesTecnicos).map(cb => cb.value);
 
         if (tecnicosAsignados.length === 0) {
-            alert("Debe ingresar al menos un técnico.");
+            alert("Debe seleccionar al menos un técnico.");
             return;
         }
 
@@ -276,7 +327,7 @@ if (formAddProgramacion) {
             alert("Fecha, Hora Inicio, Hora Fin y Tipo de Tarea son obligatorios para la programación.");
             return;
         }
-         if (programacionData.horaFin <= programacionData.horaInicio) {
+        if (programacionData.horaFin <= programacionData.horaInicio) {
             alert("La Hora Fin debe ser posterior a la Hora Inicio.");
             return;
         }
@@ -286,7 +337,10 @@ if (formAddProgramacion) {
             await addDoc(programacionesRef, programacionData);
             alert('Programación guardada con éxito!');
             formAddProgramacion.reset();
-            cargarProgramacionesExistentes(requerimientoId); // Recargar lista
+            document.querySelectorAll('#modalTecnicosCheckboxContainer input[name="modalTecnicos"]:checked').forEach(cb => {
+                cb.checked = false;
+            });
+            cargarProgramacionesExistentes(requerimientoId);
         } catch (error) {
             console.error("Error al guardar programación:", error);
             alert('Error al guardar la programación.');
@@ -401,14 +455,15 @@ async function cargarDatosParaGraficosEstadisticas() {
 }
 
 // --- LÓGICA DEL CALENDARIO ---
+// (Esta es la versión que intenta usar resourceTimeGridDay, etc.)
+// (Asegúrate de que los plugins de FullCalendar estén correctamente enlazados en index.html)
 async function inicializarOActualizarCalendario() {
-    console.log("CALENDARIO: Iniciando inicializarOActualizarCalendario (Vistas Estándar)...");
+    console.log("CALENDARIO: Iniciando inicializarOActualizarCalendario...");
     const calendarEl = document.getElementById('calendarioFullCalendar');
     if (!calendarEl) {
         console.error("CALENDARIO: Elemento #calendarioFullCalendar NO encontrado en el DOM.");
         return;
     }
-
     calendarEl.innerHTML = '<p>Cargando calendario y programaciones...</p>';
 
     if (!FullCalendar) {
@@ -418,11 +473,13 @@ async function inicializarOActualizarCalendario() {
     }
     console.log("CALENDARIO: FullCalendar está definido.");
 
+    const nombresTecnicosUnicos = new Set();
+    // Usar la lista predefinida como base para las columnas del calendario
+    LISTA_TECNICOS_PREDEFINIDOS.forEach(t => nombresTecnicosUnicos.add(t.trim()));
+
     const programacionesParaEventos = [];
     try {
         console.log("CALENDARIO: Intentando obtener programaciones desde Firestore...");
-        // Esta consulta asume que tienes un índice compuesto para 'programaciones' ordenado por 'timestampCreacion' desc.
-        // Si no lo tienes, Firestore te dará un error en la consola con un enlace para crearlo.
         const qProgramaciones = query(collectionGroup(db, 'programaciones'), orderBy('timestampCreacion', 'desc'));
         const snapshotProgramaciones = await getDocs(qProgramaciones);
         console.log(`CALENDARIO: Se encontraron ${snapshotProgramaciones.docs.length} documentos de programaciones.`);
@@ -455,159 +512,145 @@ async function inicializarOActualizarCalendario() {
                  console.warn(`CALENDARIO: No se pudo obtener la referencia al requerimiento padre para programación ${progDoc.id}`);
             }
             
+            // Añadir técnicos de esta programación a la lista de recursos si no están ya desde la base
+            if (progData.tecnicosAsignados && Array.isArray(progData.tecnicosAsignados)) {
+                progData.tecnicosAsignados.forEach(t => nombresTecnicosUnicos.add(t.trim()));
+            }
+
             let startDateTime, endDateTime;
             if (progData.fechaProgramada && progData.horaInicio) {
                 startDateTime = `${progData.fechaProgramada}T${progData.horaInicio}`;
             } else { 
                 console.warn(`CALENDARIO: Programación ${progDoc.id} con datos de fecha/hora incompletos. Omitiendo.`);
-                continue; // Omitir este evento si no tiene información esencial de inicio
+                continue; 
             }
 
             if (progData.fechaProgramada && progData.horaFin) {
                 endDateTime = `${progData.fechaProgramada}T${progData.horaFin}`;
-            } else { 
+            } else {
                 console.warn(`CALENDARIO: Programación ${progDoc.id} sin horaFin. Asumiendo 1 hora de duración.`);
                 try {
                     const startDateObj = new Date(startDateTime);
                     if(isNaN(startDateObj.getTime())) throw new Error("Fecha de inicio inválida para calcular fin");
                     startDateObj.setHours(startDateObj.getHours() + 1);
-                    endDateTime = startDateObj.toISOString().split('.')[0]; 
+                    endDateTime = startDateObj.toISOString().split('.')[0];
                 } catch (e) {
                      console.error(`CALENDARIO: Error calculando horaFin para ${progDoc.id}`, e);
-                     endDateTime = startDateTime; 
+                     endDateTime = startDateTime;
                 }
             }
             
-            const tecnicosTexto = progData.tecnicosAsignados && progData.tecnicosAsignados.length > 0 ?
-                                  progData.tecnicosAsignados.join(', ') : 'S/A'; // S/A = Sin Asignar
+            const resourceIdsParaEvento = progData.tecnicosAsignados && progData.tecnicosAsignados.length > 0 ? 
+                                          progData.tecnicosAsignados.map(t => t.trim()) : ["TECNICO SIN ASIGNAR"];
 
             programacionesParaEventos.push({
-                id: progDoc.id, 
+                id: progDoc.id,
                 requerimientoId: requerimientoRef ? requerimientoRef.id : null,
-                title: `REQ:${reqDataParaTitulo.req} (${reqDataParaTitulo.cliente || ''}) - ${progData.tipoTarea || 'Tarea'} [Téc: ${tecnicosTexto}]`, // Título del evento
+                title: `REQ:${reqDataParaTitulo.req} (${reqDataParaTitulo.cliente || ''}) - ${progData.tipoTarea || 'Tarea'}`,
                 start: startDateTime,
                 end: endDateTime,
-                extendedProps: { // Propiedades personalizadas
+                resourceIds: resourceIdsParaEvento,
+                extendedProps: {
                     tecnicosOriginales: progData.tecnicosAsignados || [], 
                     estado: progData.estadoProgramacion || '',
-                    notas: progData.notasProgramacion || '',
-                    reqNombre: reqDataParaTitulo.req,
-                    clienteNombre: reqDataParaTitulo.cliente,
-                    tipoTareaOriginal: progData.tipoTarea
+                    notas: progData.notasProgramacion || ''
                 },
-                // Puedes añadir colores basados en estado o técnico si lo deseas más adelante
-                // backgroundColor: obtenerColorPorEstado(progData.estadoProgramacion), 
-                // textColor: 'white',
             });
         }
         
+        todosLosRecursosTecnicos = Array.from(nombresTecnicosUnicos).map(nombre => ({
+            id: nombre, 
+            title: nombre 
+        }));
+        console.log("CALENDARIO: Recursos (Técnicos) preparados:", todosLosRecursosTecnicos);
         console.log(`CALENDARIO: Se procesaron ${programacionesParaEventos.length} eventos para el calendario.`);
 
     } catch (error) {
         console.error("CALENDARIO: Error obteniendo o procesando programaciones de Firestore:", error);
+        // La llamada a logCargaMasiva fue eliminada de aquí
         if (calendarEl) {
              calendarEl.innerHTML = "<p>Error al cargar datos para el calendario. Revisa la consola (F12).</p>";
         }
-        // La alerta por índice faltante
         if (error.message && error.message.toLowerCase().includes("index")) {
-            alert("Error de Firestore: El índice necesario para el calendario aún no está listo o falta. Por favor, créalo usando el enlace que aparece en la consola y espera a que se habilite.");
+            alert("Error de Firestore: El índice necesario para el calendario aún no está listo o falta. Por favor, créalo usando el enlace de la consola y espera a que se habilite.");
         }
         return; 
     }
 
-    // Destruir calendario anterior si existe, para asegurar una reinicialización limpia
     if (calendarioFullCalendar) {
-        console.log("CALENDARIO: Destruyendo calendario existente...");
+        console.log("CALENDARIO: Destruyendo calendario existente para re-renderizar.");
         calendarioFullCalendar.destroy();
-        calendarioFullCalendar = null; // Importante para que se cree uno nuevo
+        calendarioFullCalendar = null; // Asegurar que se cree uno nuevo
     }
     
     try {
-        console.log("CALENDARIO: Creando nueva instancia de FullCalendar (Vistas Estándar).");
+        console.log("CALENDARIO: Creando nueva instancia de FullCalendar con vistas de recursos.");
         calendarioFullCalendar = new FullCalendar.Calendar(calendarEl, {
-            locale: 'es', // Español
-            initialView: 'timeGridWeek', // Vista semanal con horas por defecto
+            // schedulerLicenseKey: 'CC-Attribution-NonCommercial-NoDerivatives', // Comentada para evitar advertencia
+            locale: 'es',
+            initialView: 'resourceTimeGridDay',
             headerToolbar: {
                 left: 'prev,next today',
                 center: 'title',
-                right: 'dayGridMonth,timeGridWeek,timeGridDay,listWeek' // Vistas estándar
+                right: 'resourceTimeGridDay,resourceTimeGridWeek,dayGridMonth,listWeek'
             },
-            views: { // Personalizar texto de botones si quieres
-                timeGridDay: { buttonText: 'Día' },
-                timeGridWeek: { buttonText: 'Semana' },
-                dayGridMonth: { buttonText: 'Mes' },
-                listWeek: { buttonText: 'Lista' }
+            views: {
+                resourceTimeGridDay: { buttonText: 'Día x Téc.', slotMinTime: '06:00:00', slotMaxTime: '22:00:00', slotLabelFormat: { hour: '2-digit', minute: '2-digit', hour12: false } },
+                resourceTimeGridWeek: { buttonText: 'Semana x Téc.', slotLabelFormat: { hour: '2-digit', minute: '2-digit', hour12: false } },
+                dayGridMonth: { buttonText: 'Mes (Gral.)' },
+                listWeek: { buttonText: 'Lista Sem.' }
             },
-            editable: false,  // Los eventos no se pueden arrastrar ni redimensionar
-            selectable: true, // Permite seleccionar rangos de tiempo (para futuro "crear evento")
-            events: programacionesParaEventos, // Aquí se pasan los eventos
-            contentHeight: 'auto', // Ajustar altura al contenido
-            nowIndicator: true, // Muestra una línea en la hora actual
-            slotEventOverlap: false, // Evita que los eventos se dibujen uno encima de otro visualmente
+            editable: false, 
+            selectable: true,
+            resources: todosLosRecursosTecnicos,
+            events: programacionesParaEventos,
+            contentHeight: 'auto',
+            nowIndicator: true,
+            slotEventOverlap: false, 
 
-            eventClick: function(info) { // Lo que sucede al hacer clic en un evento
-                const evento = info.event;
-                const props = evento.extendedProps;
+            eventClick: function(info) {
+                let tecnicosStr = info.event.extendedProps.tecnicosOriginales ? info.event.extendedProps.tecnicosOriginales.join(', ') : 'No asignados';
                 alert(
-                    `Servicio REQ: ${props.reqNombre || (evento.title.match(/REQ:([^ ]+)/) ? evento.title.match(/REQ:([^ ]+)/)[1] : '?')}\n` +
-                    `Cliente: ${props.clienteNombre || (evento.title.match(/\(([^)]+)\)/) ? evento.title.match(/\(([^)]+)\)/)[1] : '?') }\n` +
-                    `Tarea: ${props.tipoTareaOriginal || (evento.title.split(' - ')[1] ? evento.title.split(' - ')[1].split(' (')[0] : '?')}\n` +
-                    `Fecha: ${evento.start ? evento.start.toLocaleDateString('es-CL') : 'N/A'}\n` +
-                    `Hora: ${evento.start ? evento.start.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit'}) : ''} - ${evento.end ? evento.end.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit'}) : ''}\n` +
-                    `Técnicos: ${props.tecnicosOriginales ? props.tecnicosOriginales.join(', ') : 'No asignados'}\n` +
-                    `Estado: ${props.estado || 'N/A'}\n` +
-                    `Notas: ${props.notas || ''}`
+                    `Servicio: ${info.event.title}\n` +
+                    `Fecha: ${info.event.start ? info.event.start.toLocaleDateString('es-CL', {day: '2-digit', month: '2-digit', year: 'numeric'}) : 'N/A'}\n` +
+                    `Hora: ${info.event.start ? info.event.start.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit'}) : ''} - ${info.event.end ? info.event.end.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit'}) : ''}\n` +
+                    `Técnicos: ${tecnicosStr}\n` +
+                    `Estado: ${info.event.extendedProps.estado || 'N/A'}\n` +
+                    `Notas: ${info.event.extendedProps.notas || ''}`
                 );
-                // Podrías abrir el modal de edición de la programación aquí si lo deseas:
-                // if (evento.extendedProps.requerimientoId && evento.id) {
-                //    abrirModalParaEditarProgramacion(evento.extendedProps.requerimientoId, evento.id);
-                // }
             },
-            // Podrías añadir un callback 'select' para crear nuevas programaciones
-            // select: function(selectInfo) {
-            //    alert('Seleccionado desde ' + selectInfo.startStr + ' hasta ' + selectInfo.endStr);
-            //    // Aquí podrías abrir el modal para añadir una nueva programación,
-            //    // pre-llenando las fechas y horas con selectInfo.start y selectInfo.end
-            // }
         });
         calendarioFullCalendar.render();
-        console.log("CALENDARIO: Calendario (Vistas Estándar) renderizado.");
+        console.log("CALENDARIO: Calendario con recursos renderizado.");
     } catch (e) {
         console.error("CALENDARIO: Error CRÍTICO al inicializar FullCalendar:", e);
         if (calendarEl) calendarEl.innerHTML = "<p>Error fatal al inicializar el calendario. Revisa la consola.</p>";
     }
 }
 
+
 // --- LÓGICA DE CARGA MASIVA (COMENTADA - NECESITA REFACTORIZACIÓN COMPLETA) ---
-const csvFileInput = document.getElementById('csvFile');
-const btnProcesarCsv = document.getElementById('btnProcesarCsv');
+const csvFileInput = document.getElementById('csvFile'); // Esto podría ser null si la sección está comentada
+const btnProcesarCsv = document.getElementById('btnProcesarCsv'); // Esto podría ser null
+// const cargaMasivaLog = document.getElementById('cargaMasivaLog'); // Ya no se usa directamente aquí
 if (btnProcesarCsv) {
     btnProcesarCsv.addEventListener('click', () => {
         alert("La carga masiva está actualmente deshabilitada y necesita ser rediseñada para la nueva estructura de datos con múltiples programaciones por servicio.");
     });
+} else {
+    // console.warn("Botón de carga masiva (btnProcesarCsv) no encontrado. Normal si la sección está comentada.");
 }
-/*
-// Funciones anteriores de carga masiva simple (handleFileUpload, procesarYSubirDatosSimple)
-// irían aquí si se descomentaran, pero necesitan ser completamente reescritas.
-*/
+
 
 // --- INICIALIZACIÓN ---
 document.addEventListener('DOMContentLoaded', () => {
     console.log("app.js: DOMContentLoaded event fired.");
-    // Comprobar si los elementos del modal existen antes de añadir listeners o manipularlos
-    if (formAddProgramacion) {
-        // El listener ya está arriba, esto es solo para asegurar que no se añada otro si se refactoriza
-    } else {
-        console.warn("El formulario para añadir programaciones (formAddProgramacion) no se encontró en el DOM.");
-    }
-    const closeModalButton = document.querySelector('#modalGestionProgramaciones .close-button');
-    if (closeModalButton) {
-        // El onclick ya está en el HTML, pero si no, se añadiría aquí.
-    } else {
-        console.warn("Botón para cerrar modal de programaciones no encontrado.");
-    }
+    // Comprobaciones adicionales para elementos del DOM del modal
+    if (!modalProgramaciones) console.error("Elemento modalGestionProgramaciones no encontrado.");
+    if (!formAddProgramacion) console.warn("Elemento formAddProgramacion no encontrado. El listener no se añadirá.");
     
     mostrarVista('vista-entrada-requerimiento');
 });
 
 console.log("app.js: <<< Script execution finished.");
+
