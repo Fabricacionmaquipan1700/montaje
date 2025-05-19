@@ -210,3 +210,29 @@ td .action-button { padding: 5px 8px; font-size: 0.8em; margin-right: 4px; }
 
     th, td { font-size: 0.78em; padding: 6px 8px; white-space: normal; }
 }
+.checkbox-container {
+    max-height: 150px; /* Altura máxima, luego scroll */
+    overflow-y: auto;
+    border: 1px solid #ccc;
+    padding: 10px;
+    border-radius: var(--border-radius); /* Usa tu variable si la tienes, o ej: 6px */
+    margin-bottom: 0.8rem;
+    background-color: #fdfdfd;
+}
+
+.checkbox-container label {
+    display: block; /* Cada técnico en su propia línea */
+    margin-bottom: 5px !important; /* !important para asegurar sobreescritura si es necesario */
+    font-weight: normal !important; /* Que no sea negrita como los labels principales del modal */
+    font-size: 0.9em !important;
+    cursor: pointer;
+    color: var(--text-color) !important; /* Asegurar color de texto normal */
+}
+
+.checkbox-container input[type="checkbox"] {
+    margin-right: 8px !important;
+    width: auto !important; /* Que no ocupe el 100% */
+    vertical-align: middle !important;
+    padding: initial !important; /* Resetear padding si hereda alguno no deseado */
+    margin-bottom: initial !important; /* Resetear margen si hereda alguno no deseado */
+}
